@@ -5,7 +5,7 @@
 2. The proposed DDNet
 3. Requirements and how to run?
 4. Our SOD dataset (S-SOD)
-4. Visual comparisons
+4. Visual results and comparisons
 5. Citation and acknowledgements
 
 ## Introduction
@@ -24,5 +24,5 @@ The proposed DDNet uses three main blocks to generate optimal saliency. Firstly,
 ## Visual comparisons
 ![Visual results on challenging SIP test images](https://github.com/tanveer-hussain/EfficientSOD/blob/main/Figures/DDNetResults.png)
 
-## Citation and acknowledgements <br>
+## Citation and acknowledgements
 
