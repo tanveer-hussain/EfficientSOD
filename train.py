@@ -11,22 +11,17 @@ def train(model, opt, crit, train_loader, epoch):
     model.train()
     for i, (X, Y) in enumerate(train_loader):
         X = X.to('cuda')
-        #print('X in train model is on GPU: ', X.is_cuda)
         Y = Y.to('cuda')
-        #print('Y in train model is on GPU: ', Y.is_cuda)
-
+    
         output = model(X)
 
         loss = crit(output, Y)
-        if i % 10 == 0:
-            print ('Loss: ',loss.item())
-
+    
         opt.zero_grad()
         loss.backward()
         opt.step()
 
     return loss.item()
-
 
 def main():
 
@@ -64,8 +59,14 @@ def main():
         if epoch%4 == 0:
             print("Epoch: %d, of epochs: %d, loss: %f"%(epoch,epochs, current_loss))
         total_loss.append(current_loss)
-    plt.plot(total_loss)
+        
+    plt.plot(total_loss, marker='*', label='Model Training', color='darkorange')
+    plt.grid(True)
+    plt.xlabel('Epochs')
+    plt.ylabel('Training Loss')
+    plt.legend(loc=1)
     plt.show()
+    plt.savefig('TrainingLoss.png')
 
     torch.save(model, 'TrainedModels\\DDNet_500Model.pt')
     torch.save(model.state_dict(), 'TrainedModels\\DDNet_500Weights.pt')
