@@ -5,6 +5,7 @@ from ModelNetworks import BaseNetwork_3
 from torchsummary import summary
 from torch.utils.data import Dataset, DataLoader
 import torch.backends.cudnn as cudnn
+import matplotlib.pyplot as plt
 
 def train(model, opt, crit, train_loader, epoch):
     model.train()
@@ -18,11 +19,13 @@ def train(model, opt, crit, train_loader, epoch):
 
         loss = crit(output, Y)
         if i % 10 == 0:
-            print ('Loss: ',loss)
+            print ('Loss: ',loss.item())
 
         opt.zero_grad()
         loss.backward()
         opt.step()
+
+    return loss.item()
 
 
 def main():
@@ -34,17 +37,18 @@ def main():
 
     cudnn.benchmark = True
     model.to('cuda')
-    summary(model, (3, 236,236))
+    summary(model, (3, 224,224))
 
     base_lr = 0.0001
-    epochs = 10
+    epochs = 2
     weight_decay = 1e-3
     k = 0
+    total_loss = []
 
     optimizerr = torch.optim.Adam(model.parameters(), lr=base_lr, weight_decay=weight_decay, betas=(0.9, 0.95))
     criterion = nn.MSELoss().to('cuda')
     
-    print(next(model.parameters()).is_cuda)
+    print('Model on GPU: ', next(model.parameters()).is_cuda)
 
     dataset_path = r'D:\My Research\Video Summarization\VS via Saliency\SIP'
     d_type = ['Train', 'Test']
@@ -53,14 +57,18 @@ def main():
     train_loader = DataLoader(train_data, batch_size=16, shuffle=True, num_workers=8, drop_last=True)
 
     test_data = DatasetLoader(dataset_path, d_type[1])
-    #test_loader = DataLoader(test_data, 16, shuffle=False, num_workers=4, drop_last=True)
 
     for epoch in range(0, epochs):
 
-        train(model, optimizerr, criterion, train_loader, epoch)
-        print("Epoch: %d, of epochs: %d"%(epoch,epochs))
+        current_loss = train(model, optimizerr, criterion, train_loader, epoch)
+        if epoch%4 == 0:
+            print("Epoch: %d, of epochs: %d, loss: %f"%(epoch,epochs, current_loss))
+        total_loss.append(current_loss)
+    plt.plot(total_loss)
+    plt.show()
 
     torch.save(model, 'TrainedModels\\DDNet_500Model.pt')
+    torch.save(model.state_dict(), 'TrainedModels\\DDNet_500Weights.pt')
 
 if __name__ == '__main__':
     main()

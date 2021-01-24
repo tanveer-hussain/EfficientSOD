@@ -24,13 +24,8 @@ class DatasetLoader(Dataset):
         return self.length
 
     def __getitem__(self, index):
-
-        # start_time = time.time()
-
         x_full_path = os.path.join(self.x_path, self.X[index])
         y_full_path = os.path.join(self.y_path, self.Y[index])
-
-        # print (x_full_path)
 
         x = Image.open(x_full_path).convert('RGB')
         y = Image.open(y_full_path).convert('L')
