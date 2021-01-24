@@ -5,7 +5,7 @@
 2. The proposed DDNet
 3. Requirements and how to run?
 4. Our SOD dataset (S-SOD)
-4. Visual results and comparisons
+4. Quantitative and qualitative comparisons
 5. Citation and acknowledgements
 
 ## Introduction
