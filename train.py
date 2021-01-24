@@ -35,7 +35,7 @@ def main():
     summary(model, (3, 224,224))
 
     base_lr = 0.0001
-    epochs = 2
+    epochs = 500
     weight_decay = 1e-3
     k = 0
     total_loss = []
@@ -57,17 +57,17 @@ def main():
 
         current_loss = train(model, optimizerr, criterion, train_loader, epoch)
         if epoch%4 == 0:
-            print("Epoch: %d, of epochs: %d, loss: %f"%(epoch,epochs, current_loss))
+            print("Epoch: %d of epochs: %d, loss: %f"%(epoch,epochs, current_loss))
         total_loss.append(current_loss)
-        
+
     plt.plot(total_loss, marker='*', label='Model Training', color='darkorange')
     plt.grid(True)
     plt.xlabel('Epochs')
     plt.ylabel('Training Loss')
     plt.legend(loc=1)
-    plt.show()
     plt.savefig('TrainingLoss.png')
-
+    plt.show()
+    
     torch.save(model, 'TrainedModels\\DDNet_500Model.pt')
     torch.save(model.state_dict(), 'TrainedModels\\DDNet_500Weights.pt')
 
