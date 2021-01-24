@@ -9,7 +9,7 @@
 5. Citation and acknowledgements
 
 ## Introduction
-In this paper, inspired by the best background=foreground separation abilities of deformable convolutions, we employ them in our Densely Deformable Network
+In this paper, inspired by the best background/foreground separation abilities of deformable convolutions, we employ them in our Densely Deformable Network
 (DDNet) to achieve efficient SOD. The salient regions from densely deformable convolutions are further refined using transposed convolutions to optimally generate the saliency maps. Quantitative and qualitative evaluations using the recent SOD dataset against 22 competing techniques show our method’s efficiency and effectiveness.
 
 ## The proposed DDNet
