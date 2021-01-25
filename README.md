@@ -19,6 +19,7 @@ The proposed DDNet uses three main blocks to generate optimal saliency. Firstly,
 
 ## Requirements and how to run?
 For the trained models and high-resolution images, please visit https://drive.google.com/drive/folders/1aigSE0nLKfYlAbl9CIk4mSpCxneS2fUw?usp=sharing 
+
 Make a folder TrainedModels in the same repository and download the pretrained DDNet weights and model from the above link^.
 
 ## Our SOD dataset (S-SOD)
