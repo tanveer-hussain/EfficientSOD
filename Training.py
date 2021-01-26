@@ -2,7 +2,6 @@ import torch
 from torch import nn, cuda
 from DataGenerator import DatasetLoader
 from ModelNetworks import BaseNetwork_3
-from torchsummary import summary
 from torch.utils.data import Dataset, DataLoader
 import torch.backends.cudnn as cudnn
 import matplotlib.pyplot as plt
@@ -32,7 +31,6 @@ def main():
 
     cudnn.benchmark = True
     model.to('cuda')
-    summary(model, (3, 224,224))
 
     base_lr = 0.0001
     epochs = 500
