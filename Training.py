@@ -14,7 +14,7 @@ def train(model, opt, crit, train_loader, epoch):
     
         output = model(X)
 
-        loss = crit(output, Y)
+        loss = crit(output, Y) # this is for loss comparison
     
         opt.zero_grad()
         loss.backward()
