@@ -33,7 +33,7 @@ def main():
     model.to('cuda')
 
     base_lr = 0.0001
-    epochs = 500
+    epochs = 100
     weight_decay = 1e-3
     k = 0
     total_loss = []
@@ -47,15 +47,14 @@ def main():
     d_type = ['Train', 'Test']
 
     train_data = DatasetLoader(dataset_path, d_type[0])
-    train_loader = DataLoader(train_data, batch_size=16, shuffle=True, num_workers=8, drop_last=True)
+    train_loader = DataLoader(train_data, batch_size=48, shuffle=True, num_workers=16, drop_last=True)
 
     test_data = DatasetLoader(dataset_path, d_type[1])
-
     for epoch in range(0, epochs):
 
         current_loss = train(model, optimizerr, criterion, train_loader, epoch)
         if epoch%4 == 0:
-            print("Epoch: %d of epochs: %d, loss: %f"%(epoch,epochs, current_loss))
+            print("Epoch: %d of: %d, loss: %f"%(epoch,epochs, current_loss))
         total_loss.append(current_loss)
 
     plt.plot(total_loss, marker='*', label='Model Training', color='darkorange')
