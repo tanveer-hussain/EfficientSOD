@@ -29,14 +29,12 @@ Make a folder TrainedModels in the same repository and download the pretrained D
 
 ## Citation and acknowledgements
 <pre>
-<code>
-@misc{hussain2021densely,
+<code>@misc{hussain2021densely,
       title={Densely Deformable Efficient Salient Object Detection Network}, 
       author={Tanveer Hussain and Saeed Anwar and Amin Ullah and Khan Muhammad and Sung Wook Baik},
       year={2021},
       eprint={2102.06407},
       archivePrefix={arXiv},
       primaryClass={cs.CV}
-}
-</code>
+}</code>
 </pre>
