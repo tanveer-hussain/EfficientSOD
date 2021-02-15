@@ -28,4 +28,15 @@ Make a folder TrainedModels in the same repository and download the pretrained D
 ![Visual results on challenging SIP test images](https://github.com/tanveer-hussain/EfficientSOD/blob/main/Figures/DDNetResults.png)
 
 ## Citation and acknowledgements
-
+<pre>
+<code>
+@misc{hussain2021densely,
+      title={Densely Deformable Efficient Salient Object Detection Network}, 
+      author={Tanveer Hussain and Saeed Anwar and Amin Ullah and Khan Muhammad and Sung Wook Baik},
+      year={2021},
+      eprint={2102.06407},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
+}
+</code>
+</pre>
