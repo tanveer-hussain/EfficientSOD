@@ -23,8 +23,6 @@ For the trained models and high-resolution images, please visit: https://drive.g
 
 Make a folder TrainedModels in the same repository and download the pretrained DDNet weights and model from the above link^.
 
-## Our SOD dataset (S-SOD)
-
 ## Visual comparisons
 ![Comparison with SOTA on SIP dataset](https://github.com/tanveer-hussain/EfficientSOD/blob/main/Figures/Comparison.PNG)
 ![Visual results on challenging SIP test images](https://github.com/tanveer-hussain/EfficientSOD/blob/main/Figures/DDNetResults.png)
