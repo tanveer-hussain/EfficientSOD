@@ -1,5 +1,7 @@
 # Densely Deformable Efficient Salient Object Detection Network
 
+https://arxiv.org/abs/2102.06407
+
 ### Contents
 1. Introduction
 2. The proposed DDNet
