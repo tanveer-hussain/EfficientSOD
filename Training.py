@@ -56,14 +56,6 @@ def main():
         if epoch%4 == 0:
             print("Epoch: %d of: %d, loss: %f"%(epoch,epochs, current_loss))
         total_loss.append(current_loss)
-
-    plt.plot(total_loss, marker='*', label='Model Training', color='darkorange')
-    plt.grid(True)
-    plt.xlabel('Epochs')
-    plt.ylabel('Training Loss')
-    plt.legend(loc=1)
-    plt.savefig('TrainingLoss.png')
-    plt.show()
     
     torch.save(model, 'TrainedModels\\DDNet_500Model.pt')
     torch.save(model.state_dict(), 'TrainedModels\\DDNet_500Weights.pt')
