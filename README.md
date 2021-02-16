@@ -1,10 +1,11 @@
 # Densely Deformable Efficient Salient Object Detection Network
 
+### Paper Link: https://arxiv.org/abs/2102.06407
+
 ### Contents
 1. Introduction
 2. The proposed DDNet
 3. Requirements and how to run?
-4. Our SOD dataset (S-SOD)
 4. Quantitative and qualitative comparisons
 5. Citation and acknowledgements
 
@@ -22,11 +23,18 @@ For the trained models and high-resolution images, please visit: https://drive.g
 
 Make a folder TrainedModels in the same repository and download the pretrained DDNet weights and model from the above link^.
 
-## Our SOD dataset (S-SOD)
-
 ## Visual comparisons
 ![Comparison with SOTA on SIP dataset](https://github.com/tanveer-hussain/EfficientSOD/blob/main/Figures/Comparison.PNG)
 ![Visual results on challenging SIP test images](https://github.com/tanveer-hussain/EfficientSOD/blob/main/Figures/DDNetResults.png)
 
 ## Citation and acknowledgements
-
+<pre>
+<code>@misc{hussain2021densely,
+      title={Densely Deformable Efficient Salient Object Detection Network}, 
+      author={Tanveer Hussain and Saeed Anwar and Amin Ullah and Khan Muhammad and Sung Wook Baik},
+      year={2021},
+      eprint={2102.06407},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
+}</code>
+</pre>
