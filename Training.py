@@ -6,6 +6,11 @@ from torch.utils.data import Dataset, DataLoader
 import torch.backends.cudnn as cudnn
 import matplotlib.pyplot as plt
 
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
 def train(model, opt, crit, train_loader, epoch):
     model.train()
     for i, (X, Y) in enumerate(train_loader):
@@ -31,6 +36,7 @@ def main():
 
     cudnn.benchmark = True
     model.to('cuda')
+    print(count_parameters(model))
 
     base_lr = 0.0001
     epochs = 100

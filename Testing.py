@@ -52,4 +52,6 @@ def testing_code_dir(input_dir, output_dir):
         print("Reading: %s\n writing: %s " % (full_path, output_path))
 
 # # testing code SIP
-testing_code_dir(r'D:\My Research\Datasets\Saliency Detection\SIP\Test\Images\\',r'C:\Users\user02\Documents\GitHub\EfficientSOD\SIPTestResults\\')
+input_dir = r'D:\My Research\Datasets\Saliency Detection\RGBD\SIP\Test\Images\\'
+output_dir = r'C:\Users\user02\Documents\GitHub\EfficientSOD\SIP\\'
+testing_code_dir(input_dir,output_dir)

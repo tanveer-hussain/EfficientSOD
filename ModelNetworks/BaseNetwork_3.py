@@ -21,7 +21,7 @@ class DenseNetBackbone(nn.Module):
         self.deform1 = DeformConv2d(256, 128, 3, padding=1, modulation=True)
         self.deform2 = DeformConv2d(128, 128, 3, padding=1, modulation=True)
         # nn.ReLU(),
-        self.deform3 = DeformConv2d(128, 64, 3, padding=1, modulation=True)
+        self.deform3 = DeformConv2d(256, 64, 3, padding=1, modulation=True)
 
         # ******************** Decoding image ********************
         self.deconv1 = nn.ConvTranspose2d(in_channels=64, out_channels=64, kernel_size=(3, 3), stride=2, padding=1)
@@ -51,8 +51,9 @@ class DenseNetBackbone(nn.Module):
 
         deform1_x = self.deform1(x)
         deform2_x = self.deform2(deform1_x)
-        x = self.deform3(deform1_x)
-        x = self.deform3(deform2_x)
+        x =  torch.cat((deform1_x,deform2_x),1)
+        x = self.deform3(x)
+        # x = self.deform3(deform2_x)
 
 
 
@@ -65,7 +66,6 @@ class DenseNetBackbone(nn.Module):
         x = self.upsampling1(x)
         x = self.deconv3(x)
         # x = F.conv2d(x, v_filter)
-        x = self.upsampling2(x)
         x = self.upsampling2(x)
 
 
