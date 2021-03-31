@@ -2,6 +2,8 @@
 
 ### Paper Link: https://arxiv.org/abs/2102.06407
 
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/densely-deformable-efficient-salient-object/rgb-d-salient-object-detection-on-sip)](https://paperswithcode.com/sota/rgb-d-salient-object-detection-on-sip?p=densely-deformable-efficient-salient-object)
+
 ### Contents
 1. Introduction
 2. The proposed DDNet
