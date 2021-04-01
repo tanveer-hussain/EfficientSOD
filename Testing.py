@@ -8,7 +8,7 @@ import timeit
 
 
 # datasets = SIP  , DUT-RGBD  , NLPR  , NJU2K
-model_path = os.path.join('D:\PycharmProjects\RGBDSaliency\TrainedModels\\SIPDDNet-500.pt')
+model_path = os.path.join('TrainedModels\\DDNet_500Model.pt')
 model = torch.load(model_path)
 model.eval()
 kernel = np.ones((5,5), np.uint8)
