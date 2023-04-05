@@ -10,7 +10,7 @@ class DenseNetBackbone(nn.Module):
 
         # ******************** Encoding image ********************
 
-        originalmodel = torchvision.models.densenet169(pretrained=False, progress=True)
+        originalmodel = torchvision.models.densenet169(pretrained=True, progress=True)
         # pretrained_model = models.vgg16(pretrained=True).features
         self.custom_model = nn.Sequential(*list(originalmodel.features.children())[:-5])
         self.layer1 = nn.Sequential(
