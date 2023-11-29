@@ -7,31 +7,33 @@ import cv2
 import timeit
 
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 # datasets = SIP  , DUT-RGBD  , NLPR  , NJU2K
-model_path = os.path.join('TrainedModels\\DDNet_500Model.pt')
+model_path = os.path.join('DDNet_100.pt')
 model = torch.load(model_path)
-model.eval()
-kernel = np.ones((5,5), np.uint8)
+model.eval().to(device)
 
 def preprocess_image(img):
-    transform = T.Compose([T.Resize((224, 224)), T.ToTensor()])
+    transform = T.Compose([T.Resize((256, 256)), T.ToTensor()])
     x = transform(img)
     x = torch.unsqueeze(x, 0)
-    x = x.cuda(0)
+    x = x.to(device)
     return x
-def predictions(img):
+def predictions(img, h , w):
 
     x = preprocess_image(img)
     start_time = timeit.default_timer()
     output = model(x)
-    output = torch.squeeze(output, 0)
+    print (h, w)
+    # output = output[0]
+    output = torch.nn.functional.upsample(output, size=(h, w), mode='bilinear', align_corners=True)
+    output = torch.squeeze(output, 0).sigmoid()
 
     output = output.detach().cpu().numpy()
     output = output.dot(255)
     output *= output.max()/255.0
-    # print (max(output))
-    # output = cv2.erode(output, kernel, iterations=2)
-    # output = cv2.dilate(output, kernel, iterations=1)
+
     return output
 
 def testing_code_dir(input_dir, output_dir):
@@ -42,7 +44,9 @@ def testing_code_dir(input_dir, output_dir):
 
         img = Image.open(full_path).convert("RGB")
 
-        output = predictions(img)
+        w, h = img.size
+
+        output = predictions(img, h , w)
         output = np.transpose(output, (1, 2, 0))
         # cv2.imshow('', output)
         # cv2.waitKey(50)
@@ -52,6 +56,6 @@ def testing_code_dir(input_dir, output_dir):
         print("Reading: %s\n writing: %s " % (full_path, output_path))
 
 # # testing code SIP
-input_dir = r'D:\My Research\Datasets\Saliency Detection\RGBD\SIP\Test\Images\\'
-output_dir = r'C:\Users\user02\Documents\GitHub\EfficientSOD\SIP\\'
+input_dir = r'/home/hussaint/SODDatasets/NLPR/Test/Images/'
+output_dir = r'Output/'
 testing_code_dir(input_dir,output_dir)
