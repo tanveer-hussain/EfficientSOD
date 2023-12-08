@@ -63,6 +63,7 @@ def main():
             print("Epoch: %d of: %d, loss: %f"%(epoch,epochs, current_loss))
         total_loss.append(current_loss)
     
+    # saving model
     torch.save(model, 'TrainedModels\\DDNet_500Model.pt')
     torch.save(model.state_dict(), 'TrainedModels\\DDNet_500Weights.pt')
 
