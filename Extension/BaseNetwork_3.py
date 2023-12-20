@@ -1,6 +1,4 @@
 from torch import nn
-import torchvision
-from deformable_conv import DeformConv2d
 import torch
 import torch.nn.functional as F
 
@@ -20,3 +18,12 @@ class DenseNetBackbone(nn.Module):
 
 
         return x
+
+device = torch.device('cuda' if torch.cuda.is_available else "cpu")
+
+x = torch.randn((2, 3, 224, 224)).to(device)
+depth = torch.randn((2, 3, 224, 224)).to(device)
+# # gt = torch.randn((12, 1, 224, 224)).to(device)
+model = DenseNetBackbone().to(device)
+y = model(x,depth)
+print (y.shape)
