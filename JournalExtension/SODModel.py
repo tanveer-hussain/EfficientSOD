@@ -3,10 +3,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GATConv
 from torch_geometric.data import Data
-from sklearn.neighbors import NearestNeighbors
+from itertools import product
 
 from ResNet import B2_ResNet
 import torchvision.models as models
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class GATSegmentationModel(nn.Module):
     def __init__(self, training):
@@ -18,28 +20,32 @@ class GATSegmentationModel(nn.Module):
         if self.training:
             self.initialize_weights()
 
-        # self.conv1 = GATConv(input_dim, hidden_dim, heads=num_heads)
-        # self.conv2 = GATConv(hidden_dim * num_heads, 1, heads=1)  # Output layer with 1 channel
+        self.conv1 = GATConv(64, 32, heads=4)
+        self.conv2 = GATConv(32 * 4, 1, heads=1)  # Output layer with 1 channel
 
-    def image_to_graph(self, input):
-        # Reshape image into a vector
-        x = input.view(-1, 1).float().numpy()
+    def image_to_graph(self, input, radius=5):
+        height, width = input.shape[-2], input.shape[-1]
+        num_nodes = height * width
 
-        # Compute nearest neighbors
-        nn_model = NearestNeighbors(n_neighbors=4)  # Define the number of neighbors
-        nn_model.fit(x)
-        distances, indices = nn_model.kneighbors(x)
-
-        # Creating edge_index from nearest neighbors indices
+        # Constructing edge indices by considering connections within a radius
         edge_index = []
-        for i in range(len(indices)):
-            for j in range(1, len(indices[i])):
-                edge_index.append((i, indices[i][j]))
+        for i in range(height):
+            for j in range(width):
+                node_idx = i * width + j
+                for dx in range(-radius, radius + 1):
+                    for dy in range(-radius, radius + 1):
+                        ni, nj = i + dx, j + dy
+                        if 0 <= ni < height and 0 <= nj < width:
+                            neighbor_idx = ni * width + nj
+                            if node_idx != neighbor_idx:  # Exclude self-loops
+                                edge_index.append((node_idx, neighbor_idx))
 
-        edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
+        edge_index = torch.tensor(edge_index, dtype=torch.long).t().to(device)
 
-        # Converting image to graph representation
-        x = input.view(-1, 1)
+        # Ensure each edge exists in both directions (undirected graph)
+        edge_index = torch.cat([edge_index, edge_index.flip(0)], dim=1)
+
+        x = input.view(-1, 64)  # Assuming the input is shaped for the ResNet
         data = Data(x=x, edge_index=edge_index)
 
         return data
@@ -50,11 +56,11 @@ class GATSegmentationModel(nn.Module):
         x = self.resnet.relu(x)
         x = self.resnet.maxpool(x)
 
-        data = self.image_to_graph(x) # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
+        data = self.image_to_graph(x).to(device) # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
 
         x, edge_index = data.x, data.edge_index
         #
-        # x = F.relu(self.conv1(x, edge_index))
+        x = F.relu(self.conv1(x, edge_index))
         # x = F.dropout(x, p=0.5, training=self.training)
         # x = self.conv2(x, edge_index)
         # x.view(-1, 256, 256)  # Reshape output to a 256x256 image
@@ -81,10 +87,11 @@ class GATSegmentationModel(nn.Module):
         assert len(all_params.keys()) == len(self.resnet.state_dict().keys())
         print(self.resnet.load_state_dict(all_params))
 
-model = GATSegmentationModel(training=True)
-tensor = torch.randn((2,3,256,256))
+model = GATSegmentationModel(training=True).to(device)
+tensor = torch.randn((2,3,256,256)).to(device)
+
 with torch.no_grad():
-    out = model(tensor)
+    out = model(tensor).to(device)
     print (out.shape)
 
 print ('Done')
