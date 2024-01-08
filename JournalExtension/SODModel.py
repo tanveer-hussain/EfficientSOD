@@ -50,7 +50,9 @@ class GATSegmentationModel(nn.Module):
         x = self.resnet.relu(x)
         x = self.resnet.maxpool(x)
 
-        # x, edge_index = data.x, data.edge_index
+        data = self.image_to_graph(x) # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
+
+        x, edge_index = data.x, data.edge_index
         #
         # x = F.relu(self.conv1(x, edge_index))
         # x = F.dropout(x, p=0.5, training=self.training)
