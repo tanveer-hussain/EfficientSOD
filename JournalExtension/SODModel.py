@@ -10,6 +10,7 @@ import torchvision.models as models
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+
 class GATSegmentationModel(nn.Module):
     def __init__(self, training):
         super(GATSegmentationModel, self).__init__()
@@ -23,7 +24,7 @@ class GATSegmentationModel(nn.Module):
         self.conv1 = GATConv(64, 32, heads=4)
         self.conv2 = GATConv(32 * 4, 1, heads=1)  # Output layer with 1 channel
 
-    def image_to_graph(self, input, radius=5):
+    def image_to_graph(self, input, radius, size):
         height, width = input.shape[-2], input.shape[-1]
         num_nodes = height * width
 
@@ -45,7 +46,7 @@ class GATSegmentationModel(nn.Module):
         # Ensure each edge exists in both directions (undirected graph)
         edge_index = torch.cat([edge_index, edge_index.flip(0)], dim=1)
 
-        x = input.view(-1, 64)  # Assuming the input is shaped for the ResNet
+        x = input.view(-1, size)  # Assuming the input is shaped for the ResNet
         data = Data(x=x, edge_index=edge_index)
 
         return data
@@ -56,16 +57,16 @@ class GATSegmentationModel(nn.Module):
         x = self.resnet.relu(x)
         x = self.resnet.maxpool(x)
 
-        data = self.image_to_graph(x).to(device) # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
+        data = self.image_to_graph(x, radius=5, size=64).to(device)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
 
         x, edge_index = data.x, data.edge_index
         #
         x = F.relu(self.conv1(x, edge_index))
-        # x = F.dropout(x, p=0.5, training=self.training)
-        # x = self.conv2(x, edge_index)
-        # x.view(-1, 256, 256)  # Reshape output to a 256x256 image
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = self.conv2(x, edge_index)
+        y = x.view(-1, 64, 64)  # Reshape output to a 256x256 image
 
-        return x
+        return y
 
     def initialize_weights(self):
         print('Loading weights...')
@@ -87,11 +88,23 @@ class GATSegmentationModel(nn.Module):
         assert len(all_params.keys()) == len(self.resnet.state_dict().keys())
         print(self.resnet.load_state_dict(all_params))
 
+
+# from ptflops import get_model_complexity_info
+
+# with torch.cuda.device(0):
+#   net = GATSegmentationModel(training=False)
+#   x = torch.randn((3, 224, 224))
+#   macs, params = get_model_complexity_info(net,(3, 256, 256), as_strings=True,
+#                                            print_per_layer_stat=True, verbose=True)
+#   print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
+#   print('{:<30}  {:<8}'.format('Number of parameters: ', params))
+
+
 model = GATSegmentationModel(training=True).to(device)
-tensor = torch.randn((2,3,256,256)).to(device)
+tensor = torch.randn((2, 3, 256, 256)).to(device)
 
 with torch.no_grad():
     out = model(tensor).to(device)
-    print (out.shape)
+    print(out.shape)
 
-print ('Done')
+print('Done')
