@@ -10,7 +10,7 @@ import torchvision.models as models
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-batch_size = 2
+batch_size = 8
 class ChannelReducer(nn.Module):
     def __init__(self, in_channels, out_channels, reduction_ratio=16):
         super(ChannelReducer, self).__init__()
@@ -82,16 +82,16 @@ class ASPPModule(nn.Module):
         out = torch.cat((out1, out2, out3, out4, global_pool), dim=1)
         return out
 class WeightedFusionAttentionCNN(nn.Module):
-    def __init__(self):
+    def __init__(self, batch_size):
         super(WeightedFusionAttentionCNN, self).__init__()
 
         # Upsampling layers to match the final size
         self.up = nn.Upsample(size=(64, 64), mode='bilinear')
 
         # Convolutional layers for each input
-        self.conv1 = nn.Conv2d(768, 256, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(512, 256, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(768, 256, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(512, 256, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
 
         # Attention mechanism
         self.attention = nn.Sequential(
@@ -103,19 +103,19 @@ class WeightedFusionAttentionCNN(nn.Module):
 
         self.final_conv = ASPPModule(768, 1)
 
-    def forward(self, x1, x2, x3):
+    def forward(self, x2, x3, x4):
         # Upsample smaller inputs to match the size of the largest one
         x2 = self.up(x2)
         x3 = self.up(x3)
-        x1 = self.up(x1)
+        x4 = self.up(x4)
 
         # Apply convolutional layers to each input
-        x1 = self.conv1(x1)
+        x2 = self.conv1(x2)
         x2 = self.conv2(x2)
         x3 = self.conv3(x3)
 
         # Concatenate the feature maps
-        fused = torch.cat((x1, x2, x3), dim=1)
+        fused = torch.cat((x2, x3, x4), dim=1)
 
         # Apply attention mechanism
         attention_weights = self.attention(fused)
@@ -128,11 +128,26 @@ class WeightedFusionAttentionCNN(nn.Module):
 
         return output
 
+class GAT(torch.nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels, heads):
+        super().__init__()
+        self.conv1 = GATConv(in_channels, hidden_channels, heads, dropout=0.6)
+        # On the Pubmed dataset, use `heads` output heads in `conv2`.
+        self.conv2 = GATConv(hidden_channels * heads, out_channels, heads=1,
+                             concat=False, dropout=0.6)
+
+    def forward(self, x, edge_index):
+        x = F.dropout(x, p=0.6, training=self.training)
+        x = F.elu(self.conv1(x, edge_index))
+        x = F.dropout(x, p=0.6, training=self.training)
+        x = self.conv2(x, edge_index)
+        return x
 class GATSegmentationModel(nn.Module):
     def __init__(self, training):
         super(GATSegmentationModel, self).__init__()
 
         self.resnet = B2_ResNet()
+        self.channels = 32
 
         self.training = training
         if self.training:
@@ -142,14 +157,13 @@ class GATSegmentationModel(nn.Module):
         self.conv3_reduce = ChannelReducer(1024, 64)
         self.conv4_reduce = ChannelReducer(2048, 64)
 
-        self.gatconv21 = GATConv(32, 16, heads=4)
-        self.gatconv22 = GATConv(16 * 4, 8, heads=4)
+        self.gatconv21 = GAT(in_channels=64, hidden_channels=64, out_channels=self.channels, heads=4)
 
-        self.gatconv31 = GATConv(16, 8, heads=8)
-        self.gatconv32 = GATConv(8 * 8, 8, heads=8)
+        #
+        self.gatconv31 = GATConv(in_channels=64, hidden_channels=64, out_channels=self.channels, heads=4)
 
-        self.gatconv41 = GATConv(8, 4, heads=12)
-        self.gatconv42 = GATConv(4 * 12, 4, heads=12)
+        #
+        self.gatconv41 = GATConv(in_channels=64, hidden_channels=64, out_channels=self.channels, heads=4)
 
         self.wghted_attn = WeightedFusionAttentionCNN()
 
@@ -178,7 +192,7 @@ class GATSegmentationModel(nn.Module):
         # Ensure each edge exists in both directions (undirected graph)
         edge_index = torch.cat([edge_index, edge_index.flip(0)], dim=1)
 
-        x = input.view(-1, size)  # Assuming the input is shaped for the ResNet
+        x = input.view(-1, size * size)  # Assuming the input is shaped for the ResNet
         data = Data(x=x, edge_index=edge_index)
 
         return data
@@ -199,32 +213,34 @@ class GATSegmentationModel(nn.Module):
         x4 = self.conv4_reduce(x4)
 
         data2 = self.image_to_graph(x2, radius=5, size=32).to(device)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
-        x2, edge_index2 = data2.x, data2.edge_index
-        x2 = F.relu(self.gatconv21(x2, edge_index2))
-        x2 = F.dropout(x2, p=0.5, training=self.training)
-        x2 = F.relu(self.gatconv22(x2, edge_index2))
+        # x2, edge_index2 = data2.x, data2.edge_index
+        x2 = F.relu(self.gatconv21(x2.view(-1, 64), data2.edge_index))
+        # x2 = F.dropout(x2, p=0.5, training=self.training)
+        # x2 = F.relu(self.gatconv22(x2, edge_index2))
         y2 = x2.view(-1, 32, 32).unsqueeze(0)
 
         data3 = self.image_to_graph(x3, radius=5, size=16).to(device)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
-        x3, edge_index3 = data3.x, data3.edge_index
-        x3 = F.relu(self.gatconv31(x3, edge_index3))
-        x3 = F.dropout(x3, p=0.5, training=self.training)
-        x3 = F.relu(self.gatconv32(x3, edge_index3))
+        # x3, edge_index3 = data3.x, data3.edge_index
+        x3 = F.relu(self.gatconv31(x3.view(-1, 64), data3.edge_index))
+        # x3 = F.dropout(x3, p=0.5, training=self.training)
+        # x3 = F.relu(self.gatconv32(x3, edge_index3))
         y3 = x3.view(-1, 16, 16).unsqueeze(0)
 
         data4 = self.image_to_graph(x4, radius=5, size=8).to(device)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
-        x4, edge_index4 = data4.x, data4.edge_index
-        x4 = F.relu(self.gatconv41(x4, edge_index4))
-        x4 = F.dropout(x4, p=0.5, training=self.training)
-        x4 = F.relu(self.gatconv42(x4, edge_index4))
+        # x4, edge_index4 = data4.x, data4.edge_index
+        x4 = F.relu(self.gatconv41(x4.view(-1, 64), data4.edge_index))
+        # x4 = F.dropout(x4, p=0.5, training=self.training)
+        # x4 = F.relu(self.gatconv42(x4, edge_index4))
         y4 = x4.view(-1, 8, 8).unsqueeze(0)
 
-        y = self.wghted_attn(y4, y3, y2)
-        y = self.up(y)
-        y = self.conv_pred(y)
+        print(y2.shape, y3.shape, y4.shape)
+        print (input.size(0) * self.channels,input.size(0) * self.channels * 4, input.size(0) * self.channels * 4)
+        # y = self.wghted_attn(y4, y3, y2, input.size(0))
+        # y = self.up(y)
+        # y = self.conv_pred(y)
 
 
-        return y
+        return y4
 
     def initialize_weights(self):
         print('Loading weights...')
