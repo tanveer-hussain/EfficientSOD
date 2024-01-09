@@ -10,7 +10,7 @@ import torchvision.models as models
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-
+batch_size = 2
 class ChannelReducer(nn.Module):
     def __init__(self, in_channels, out_channels, reduction_ratio=16):
         super(ChannelReducer, self).__init__()
@@ -259,7 +259,7 @@ class GATSegmentationModel(nn.Module):
 
 
 model = GATSegmentationModel(training=True).to(device)
-tensor = torch.randn((2, 3, 256, 256)).to(device)
+tensor = torch.randn((batch_size, 3, 256, 256)).to(device)
 
 with torch.no_grad():
     out = model(tensor).to(device)
