@@ -192,7 +192,7 @@ class GATSegmentationModel(nn.Module):
         y4 = x4.view(-1, 8, 8)
         print(y4.shape, y3.shape, y2.shape)
 
-        y = self.wghted_attn(x4, x3, x2)
+        y = self.wghted_attn(y4, y3, y2)
         print (y.shape)
 
 
