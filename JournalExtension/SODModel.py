@@ -70,7 +70,7 @@ class GATSegmentationModel(nn.Module):
         self.conv4_reduce = ChannelReducer(2048, 64)
 
         self.gatconv1 = GATConv(32, 16, heads=4)
-        self.gatconv2 = GATConv(16 * 4, 1, heads=1)  # Output layer with 1 channel
+        # self.gatconv2 = GATConv(16, 16, heads=4)  # Output layer with 1 channel
 
     def image_to_graph(self, input, radius, size):
         height, width = input.shape[-2], input.shape[-1]
@@ -114,17 +114,14 @@ class GATSegmentationModel(nn.Module):
         x3 = self.conv3_reduce(x3)
         x4 = self.conv4_reduce(x4)
 
-        print(x4.shape, x3.shape, x2.shape)
-
-        data2 = self.image_to_graph(x2, radius=5, size=64).to(device)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
+        data2 = self.image_to_graph(x2, radius=5, size=32).to(device)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
         x2, edge_index2 = data2.x, data2.edge_index
         x2 = F.relu(self.gatconv1(x2, edge_index2))
-        print(x2.shape)
-        # x = F.dropout(x, p=0.5, training=self.training)
-        # x = self.conv2(x, edge_index)
-        # y = x.view(-1, 64, 64)  # Reshape output to a 256x256 image
+        y2 = F.dropout(x2, p=0.5, training=self.training)
+        # x2 = self.gatconv2(x2, edge_index2)
+        # y2 = x2.view(-1, 32, 32)  # Reshape output to a 256x256 image
 
-        return x4
+        return y2
 
     def initialize_weights(self):
         print('Loading weights...')
