@@ -55,6 +55,54 @@ class ChannelReducer(nn.Module):
         return x3  # Remove singleton spatial dimensions
 
 
+class WeightedFusionAttentionCNN(nn.Module):
+    def __init__(self):
+        super(WeightedFusionAttentionCNN, self).__init__()
+
+        # Upsampling layers to match the final size
+        self.up1 = nn.Upsample(size=(16, 16), mode='bilinear')
+        self.up2 = nn.Upsample(size=(32, 32), mode='bilinear')
+
+        # Convolutional layers for each input
+        self.conv1 = nn.Conv2d(768, 128, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(512, 128, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
+
+        # Attention mechanism
+        self.attention = nn.Sequential(
+            nn.Conv2d(384, 128, kernel_size=1),  # Adjust channels for attention
+            nn.ReLU(),
+            nn.Conv2d(128, 1, kernel_size=1),
+            nn.Sigmoid()
+        )
+
+        # Final convolutional layer for output
+        self.final_conv = nn.Conv2d(128, 1, kernel_size=3, padding=1)
+
+    def forward(self, x1, x2, x3):
+        # Upsample smaller inputs to match the size of the largest one
+        x2 = self.up1(x2)
+        x3 = self.up2(x3)
+
+        # Apply convolutional layers to each input
+        x1 = self.conv1(x1)
+        x2 = self.conv2(x2)
+        x3 = self.conv3(x3)
+
+        # Concatenate the feature maps
+        fused = torch.cat((x1, x2, x3), dim=1)
+
+        # Apply attention mechanism
+        attention_weights = self.attention(fused)
+
+        # Apply attention to fused features
+        fused_attention = fused * attention_weights
+
+        # Final convolutional layer for output
+        output = self.final_conv(fused_attention)
+
+        return output
+
 class GATSegmentationModel(nn.Module):
     def __init__(self, training):
         super(GATSegmentationModel, self).__init__()
@@ -77,6 +125,8 @@ class GATSegmentationModel(nn.Module):
 
         self.gatconv41 = GATConv(8, 4, heads=12)
         self.gatconv42 = GATConv(4 * 12, 4, heads=12)
+
+        self.wghted_attn = WeightedFusionAttentionCNN()
 
     def image_to_graph(self, input, radius, size):
         height, width = input.shape[-2], input.shape[-1]
@@ -141,6 +191,9 @@ class GATSegmentationModel(nn.Module):
         x4 = F.relu(self.gatconv42(x4, edge_index4))
         y4 = x4.view(-1, 8, 8)
         print(y4.shape, y3.shape, y2.shape)
+
+        y = self.wghted_attn(x4, x3, x2)
+        print (y.shape)
 
 
         return y2
