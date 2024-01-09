@@ -140,7 +140,7 @@ class GATSegmentationModel(nn.Module):
         x4 = F.dropout(x4, p=0.5, training=self.training)
         x4 = F.relu(self.gatconv42(x4, edge_index4))
         y4 = x4.view(-1, 8, 8)
-        print(y3.shape)
+        print(y4.shape, y3.shape, y2.shape)
 
 
         return y2
