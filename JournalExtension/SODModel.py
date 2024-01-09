@@ -60,24 +60,24 @@ class WeightedFusionAttentionCNN(nn.Module):
         super(WeightedFusionAttentionCNN, self).__init__()
 
         # Upsampling layers to match the final size
-        self.up1 = nn.Upsample(size=(16, 16), mode='bilinear')
-        self.up2 = nn.Upsample(size=(32, 32), mode='bilinear')
+        self.up1 = nn.Upsample(size=(32, 32), mode='bilinear')
+        self.up2 = nn.Upsample(size=(64, 64), mode='bilinear')
 
         # Convolutional layers for each input
-        self.conv1 = nn.Conv2d(768, 128, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(512, 128, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
+        self.conv1 = nn.Conv2d(768, 256, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(512, 256, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
 
         # Attention mechanism
         self.attention = nn.Sequential(
-            nn.Conv2d(384, 128, kernel_size=1),  # Adjust channels for attention
+            nn.Conv2d(768, 256, kernel_size=1),  # Adjust channels for attention
             nn.ReLU(),
-            nn.Conv2d(128, 1, kernel_size=1),
+            nn.Conv2d(256, 1, kernel_size=1),
             nn.Sigmoid()
         )
 
         # Final convolutional layer for output
-        self.final_conv = nn.Conv2d(128, 1, kernel_size=3, padding=1)
+        self.final_conv = nn.Conv2d(256, 1, kernel_size=3, padding=1)
 
     def forward(self, x1, x2, x3):
         # Upsample smaller inputs to match the size of the largest one
