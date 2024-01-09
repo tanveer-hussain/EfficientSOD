@@ -55,13 +55,38 @@ class ChannelReducer(nn.Module):
         return x3  # Remove singleton spatial dimensions
 
 
+class ASPPModule(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(ASPPModule, self).__init__()
+
+        # ASPP convolutions with different dilation rates
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=1)
+        self.conv2 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, dilation=1)
+        self.conv3 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=2, dilation=2)
+        self.conv4 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=3, dilation=3)
+        self.conv5 = nn.Conv2d(in_channels, out_channels, kernel_size=1)
+
+    def forward(self, x):
+        # Apply ASPP convolutions with different dilation rates
+        out1 = self.conv1(x)
+        out2 = self.conv2(x)
+        out3 = self.conv3(x)
+        out4 = self.conv4(x)
+
+        # Global average pooling
+        global_pool = nn.functional.adaptive_avg_pool2d(x, 1)
+        global_pool = self.conv5(global_pool)
+        global_pool = nn.functional.interpolate(global_pool, size=x.shape[2:], mode='bilinear', align_corners=False)
+
+        # Concatenate ASPP branches and global pooling
+        out = torch.cat((out1, out2, out3, out4, global_pool), dim=1)
+        return out
 class WeightedFusionAttentionCNN(nn.Module):
     def __init__(self):
         super(WeightedFusionAttentionCNN, self).__init__()
 
         # Upsampling layers to match the final size
-        self.up1 = nn.Upsample(size=(32, 32), mode='bilinear')
-        self.up2 = nn.Upsample(size=(64, 64), mode='bilinear')
+        self.up = nn.Upsample(size=(64, 64), mode='bilinear')
 
         # Convolutional layers for each input
         self.conv1 = nn.Conv2d(768, 256, kernel_size=3, padding=1)
@@ -76,13 +101,13 @@ class WeightedFusionAttentionCNN(nn.Module):
             nn.Sigmoid()
         )
 
-        # Final convolutional layer for output
-        self.final_conv = nn.Conv2d(256, 1, kernel_size=3, padding=1)
+        self.final_conv = ASPPModule(768, 1)
 
     def forward(self, x1, x2, x3):
         # Upsample smaller inputs to match the size of the largest one
-        x2 = self.up1(x2)
-        x3 = self.up2(x3)
+        x2 = self.up(x2)
+        x3 = self.up(x3)
+        x1 = self.up(x1)
 
         # Apply convolutional layers to each input
         x1 = self.conv1(x1)
@@ -127,6 +152,9 @@ class GATSegmentationModel(nn.Module):
         self.gatconv42 = GATConv(4 * 12, 4, heads=12)
 
         self.wghted_attn = WeightedFusionAttentionCNN()
+
+        self.up = nn.Upsample(size=(256, 256), mode='bilinear')
+        self.conv_pred = nn.Conv2d(5,1,1)
 
     def image_to_graph(self, input, radius, size):
         height, width = input.shape[-2], input.shape[-1]
@@ -175,28 +203,28 @@ class GATSegmentationModel(nn.Module):
         x2 = F.relu(self.gatconv21(x2, edge_index2))
         x2 = F.dropout(x2, p=0.5, training=self.training)
         x2 = F.relu(self.gatconv22(x2, edge_index2))
-        y2 = x2.view(-1, 32, 32)
+        y2 = x2.view(-1, 32, 32).unsqueeze(0)
 
         data3 = self.image_to_graph(x3, radius=5, size=16).to(device)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
         x3, edge_index3 = data3.x, data3.edge_index
         x3 = F.relu(self.gatconv31(x3, edge_index3))
         x3 = F.dropout(x3, p=0.5, training=self.training)
         x3 = F.relu(self.gatconv32(x3, edge_index3))
-        y3 = x3.view(-1, 16, 16)
+        y3 = x3.view(-1, 16, 16).unsqueeze(0)
 
         data4 = self.image_to_graph(x4, radius=5, size=8).to(device)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
         x4, edge_index4 = data4.x, data4.edge_index
         x4 = F.relu(self.gatconv41(x4, edge_index4))
         x4 = F.dropout(x4, p=0.5, training=self.training)
         x4 = F.relu(self.gatconv42(x4, edge_index4))
-        y4 = x4.view(-1, 8, 8)
-        print(y4.shape, y3.shape, y2.shape)
+        y4 = x4.view(-1, 8, 8).unsqueeze(0)
 
         y = self.wghted_attn(y4, y3, y2)
-        print (y.shape)
+        y = self.up(y)
+        y = self.conv_pred(y)
 
 
-        return y2
+        return y
 
     def initialize_weights(self):
         print('Loading weights...')
