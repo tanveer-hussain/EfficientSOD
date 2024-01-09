@@ -11,6 +11,50 @@ import torchvision.models as models
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
+class ChannelReducer(nn.Module):
+    def __init__(self, in_channels, out_channels, reduction_ratio=16):
+        super(ChannelReducer, self).__init__()
+
+        # 1x1 Convolution layers to reduce channels gradually
+        self.conv1 = nn.Conv2d(in_channels, in_channels // 2, kernel_size=1)
+        self.conv2 = nn.Conv2d(in_channels // 2, in_channels // 4, kernel_size=1)
+        self.conv3 = nn.Conv2d(in_channels // 4, out_channels, kernel_size=1)
+
+        # Channel pooling to further reduce channels
+        self.pool = nn.AdaptiveAvgPool2d(1)
+
+        # Channel attention blocks
+        self.se1 = self._make_se_block(in_channels // 2, reduction_ratio)
+        self.se2 = self._make_se_block(in_channels // 4, reduction_ratio)
+        self.se3 = self._make_se_block(out_channels, reduction_ratio)
+        self.se4 = self._make_se_block(out_channels, reduction_ratio)
+
+    def _make_se_block(self, in_channels, reduction_ratio):
+        return nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(in_channels, in_channels // reduction_ratio, kernel_size=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels // reduction_ratio, in_channels, kernel_size=1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        # Apply 1x1 convolutions
+        x1 = torch.relu(self.conv1(x))
+        x1 = x1 * self.se1(x1)  # Apply channel attention
+
+        x2 = torch.relu(self.conv2(x1))
+        x2 = x2 * self.se2(x2)  # Apply channel attention
+
+        x3 = torch.relu(self.conv3(x2))
+        x3 = x3 * self.se3(x3)  # Apply channel attention
+
+        # Channel pooling to reduce spatial dimensions to 1x1
+        # x3 = self.pool(x3)
+
+        return x3  # Remove singleton spatial dimensions
+
+
 class GATSegmentationModel(nn.Module):
     def __init__(self, training):
         super(GATSegmentationModel, self).__init__()
@@ -21,8 +65,12 @@ class GATSegmentationModel(nn.Module):
         if self.training:
             self.initialize_weights()
 
-        self.conv1 = GATConv(64, 32, heads=4)
-        self.conv2 = GATConv(32 * 4, 1, heads=1)  # Output layer with 1 channel
+        self.conv2_reduce = ChannelReducer(512, 64)
+        self.conv3_reduce = ChannelReducer(1024, 64)
+        self.conv4_reduce = ChannelReducer(2048, 64)
+
+        self.gatconv1 = GATConv(64, 32, heads=4)
+        self.gatconv2 = GATConv(32 * 4, 1, heads=1)  # Output layer with 1 channel
 
     def image_to_graph(self, input, radius, size):
         height, width = input.shape[-2], input.shape[-1]
@@ -57,16 +105,26 @@ class GATSegmentationModel(nn.Module):
         x = self.resnet.relu(x)
         x = self.resnet.maxpool(x)
 
-        data = self.image_to_graph(x, radius=5, size=64).to(device)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
+        x1 = self.resnet.layer1(x)  # 256 x 64 x 64
+        x2 = self.resnet.layer2(x1)  # 512 x 32 x 32
+        x3 = self.resnet.layer3(x2)  # 1024 x 16 x 16
+        x4 = self.resnet.layer4(x3)  # 2048 x 8 x 8
 
-        x, edge_index = data.x, data.edge_index
-        #
-        x = F.relu(self.conv1(x, edge_index))
-        x = F.dropout(x, p=0.5, training=self.training)
-        x = self.conv2(x, edge_index)
-        y = x.view(-1, 64, 64)  # Reshape output to a 256x256 image
+        x2 = self.conv2_reduce(x2)
+        x3 = self.conv3_reduce(x3)
+        x4 = self.conv4_reduce(x4)
 
-        return y
+        print(x4.shape, x3.shape, x2.shape)
+
+        data2 = self.image_to_graph(x2, radius=5, size=32).to(device)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
+        x2, edge_index2 = data2.x, data2.edge_index
+        x2 = F.relu(self.gatconv1(x2, edge_index2))
+        print(x2.shape)
+        # x = F.dropout(x, p=0.5, training=self.training)
+        # x = self.conv2(x, edge_index)
+        # y = x.view(-1, 64, 64)  # Reshape output to a 256x256 image
+
+        return x4
 
     def initialize_weights(self):
         print('Loading weights...')
