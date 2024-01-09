@@ -70,7 +70,10 @@ class GATSegmentationModel(nn.Module):
         self.conv4_reduce = ChannelReducer(2048, 64)
 
         self.gatconv21 = GATConv(32, 16, heads=4)
-        self.gatconv22 = GATConv(16 * 4, 8, heads=4)  # Output layer with 1 channel
+        self.gatconv22 = GATConv(16 * 4, 8, heads=4)
+
+        self.gatconv31 = GATConv(16, 8, heads=4)
+        self.gatconv32 = GATConv(8 * 4, 8, heads=4)
 
     def image_to_graph(self, input, radius, size):
         height, width = input.shape[-2], input.shape[-1]
@@ -126,7 +129,8 @@ class GATSegmentationModel(nn.Module):
         x3 = F.relu(self.gatconv31(x3, edge_index3))
         x3 = F.dropout(x3, p=0.5, training=self.training)
         x3 = F.relu(self.gatconv32(x3, edge_index3))
-        y3 = x3.view(-1, 32, 32)
+        y3 = x3.view(-1, 16, 16)
+        print (y3.shape)
 
         return y2
 
