@@ -89,9 +89,9 @@ class WeightedFusionAttentionCNN(nn.Module):
         self.up = nn.Upsample(size=(64, 64), mode='bilinear')
 
         # Convolutional layers for each input
-        self.conv2 = nn.Conv2d(batch_size * in_channels, 256, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(batch_size * in_channels * 4, 256, kernel_size=3, padding=1)
-        self.conv4 = nn.Conv2d(batch_size * in_channels * 4, 256, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(in_channels * 2, 256, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(in_channels * 2, 256, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(in_channels * 2, 256, kernel_size=3, padding=1)
 
         # Attention mechanism
         self.attention = nn.Sequential(
@@ -212,30 +212,30 @@ class GATSegmentationModel(nn.Module):
         x3 = self.conv3_reduce(x3)
         x4 = self.conv4_reduce(x4)
 
-        data2 = self.image_to_graph(x2, radius=5, size=32).to(device)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
-        # x2, edge_index2 = data2.x, data2.edge_index
-        x2 = F.relu(self.gatconv21(x2.view(-1, 64), data2.edge_index))
-        # x2 = F.dropout(x2, p=0.5, training=self.training)
-        # x2 = F.relu(self.gatconv22(x2, edge_index2))
-        y2 = x2.view(-1, 32, 32).unsqueeze(0)
+        # data2 = self.image_to_graph(x2, radius=5, size=32)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
+        # # x2, edge_index2 = data2.x, data2.edge_index
+        # x2 = F.relu(self.gatconv21(x2.view(-1, 64), data2.edge_index))
+        # # x2 = F.dropout(x2, p=0.5, training=self.training)
+        # # x2 = F.relu(self.gatconv22(x2, edge_index2))
+        # y2 = x2.view(-1, 32, 32).unsqueeze(0)
+        #
+        # data3 = self.image_to_graph(x3, radius=5, size=16)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
+        # # x3, edge_index3 = data3.x, data3.edge_index
+        # x3 = F.relu(self.gatconv31(x3.view(-1, 64), data3.edge_index))
+        # # x3 = F.dropout(x3, p=0.5, training=self.training)
+        # # x3 = F.relu(self.gatconv32(x3, edge_index3))
+        # y3 = x3.view(-1, 16, 16).unsqueeze(0)
+        #
+        # data4 = self.image_to_graph(x4, radius=5, size=8)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
+        # # x4, edge_index4 = data4.x, data4.edge_index
+        # x4 = F.relu(self.gatconv41(x4.view(-1, 64), data4.edge_index))
+        # # x4 = F.dropout(x4, p=0.5, training=self.training)
+        # # x4 = F.relu(self.gatconv42(x4, edge_index4))
+        # y4 = x4.view(-1, 8, 8).unsqueeze(0)
+        print (x2.shape, x3.shape, x4.shape)
 
-        data3 = self.image_to_graph(x3, radius=5, size=16).to(device)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
-        # x3, edge_index3 = data3.x, data3.edge_index
-        x3 = F.relu(self.gatconv31(x3.view(-1, 64), data3.edge_index))
-        # x3 = F.dropout(x3, p=0.5, training=self.training)
-        # x3 = F.relu(self.gatconv32(x3, edge_index3))
-        y3 = x3.view(-1, 16, 16).unsqueeze(0)
+        y = self.wghted_attn(x2, x3, x4)
 
-        data4 = self.image_to_graph(x4, radius=5, size=8).to(device)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
-        # x4, edge_index4 = data4.x, data4.edge_index
-        x4 = F.relu(self.gatconv41(x4.view(-1, 64), data4.edge_index))
-        # x4 = F.dropout(x4, p=0.5, training=self.training)
-        # x4 = F.relu(self.gatconv42(x4, edge_index4))
-        y4 = x4.view(-1, 8, 8).unsqueeze(0)
-
-        print (input.size(0) * self.channels, input.size(0) * self.channels * 4, input.size(0) * self.channels * 4)
-        y = self.wghted_attn(y2, y3, y4)
-        print (y.shape)
         y = self.up(y)
         y = self.conv_pred(y)
 
@@ -274,11 +274,11 @@ class GATSegmentationModel(nn.Module):
 #   print('{:<30}  {:<8}'.format('Number of parameters: ', params))
 
 
-model = GATSegmentationModel(training=True).to(device)
-tensor = torch.randn((batch_size, 3, 256, 256)).to(device)
-
-with torch.no_grad():
-    out = model(tensor).to(device)
-    print(out.shape)
-
-print('Done')
+# model = GATSegmentationModel(training=True).to(device)
+# tensor = torch.randn((batch_size, 3, 256, 256)).to(device)
+#
+# with torch.no_grad():
+#     out = model(tensor).to(device)
+#     print(out.shape)
+#
+# print('Done')
