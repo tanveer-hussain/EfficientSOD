@@ -8,9 +8,100 @@ from itertools import product
 from ResNet import B2_ResNet
 import torchvision.models as models
 
+from torch.distributions import Normal, Independent, kl
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 batch_size = 8
+
+class Encoder_x(nn.Module):
+    def __init__(self, input_channels, channels, latent_size):
+        super(Encoder_x, self).__init__()
+        self.contracting_path = nn.ModuleList()
+        self.input_channels = input_channels
+        self.relu = nn.ReLU(inplace=True)
+        self.layer1 = nn.Conv2d(input_channels, channels, kernel_size=4, stride=2, padding=1)
+        self.bn1 = nn.BatchNorm2d(channels)
+        self.layer2 = nn.Conv2d(channels, 2*channels, kernel_size=4, stride=2, padding=1)
+        self.bn2 = nn.BatchNorm2d(channels * 2)
+        self.layer3 = nn.Conv2d(2*channels, 4*channels, kernel_size=4, stride=2, padding=1)
+        self.bn3 = nn.BatchNorm2d(channels * 4)
+        self.layer4 = nn.Conv2d(4*channels, 8*channels, kernel_size=4, stride=2, padding=1)
+        self.bn4 = nn.BatchNorm2d(channels * 8)
+        self.layer5 = nn.Conv2d(8*channels, 8*channels, kernel_size=4, stride=2, padding=1)
+        self.bn5 = nn.BatchNorm2d(channels * 8)
+        self.channel = channels
+
+        self.fc1 = nn.Linear(channels * 8 * 11 * 11, latent_size)
+        self.fc2 = nn.Linear(channels * 8 * 11 * 11, latent_size)
+
+        self.leakyrelu = nn.LeakyReLU()
+
+    def forward(self, input):
+        output = self.leakyrelu(self.bn1(self.layer1(input)))
+        # print(output.size())
+        output = self.leakyrelu(self.bn2(self.layer2(output)))
+        # print(output.size())
+        output = self.leakyrelu(self.bn3(self.layer3(output)))
+        # print(output.size())
+        output = self.leakyrelu(self.bn4(self.layer4(output)))
+        # print(output.size())
+        output = self.leakyrelu(self.bn4(self.layer5(output)))
+        output = output.view(-1, self.channel * 8 * 11 * 11)
+        # print(output.size())
+        # output = self.tanh(output)
+
+        mu = self.fc1(output)
+        logvar = self.fc2(output)
+        dist = Independent(Normal(loc=mu, scale=torch.exp(logvar)), 1)
+        # print(output.size())
+        # output = self.tanh(output)
+
+        return dist, mu, logvar
+
+class Encoder_xy(nn.Module):
+    def __init__(self, input_channels, channels, latent_size):
+        super(Encoder_xy, self).__init__()
+        self.contracting_path = nn.ModuleList()
+        self.input_channels = input_channels
+        self.relu = nn.ReLU(inplace=True)
+        self.layer1 = nn.Conv2d(input_channels, channels, kernel_size=4, stride=2, padding=1)
+        self.bn1 = nn.BatchNorm2d(channels)
+        self.layer2 = nn.Conv2d(channels, 2*channels, kernel_size=4, stride=2, padding=1)
+        self.bn2 = nn.BatchNorm2d(channels * 2)
+        self.layer3 = nn.Conv2d(2*channels, 4*channels, kernel_size=4, stride=2, padding=1)
+        self.bn3 = nn.BatchNorm2d(channels * 4)
+        self.layer4 = nn.Conv2d(4*channels, 8*channels, kernel_size=4, stride=2, padding=1)
+        self.bn4 = nn.BatchNorm2d(channels * 8)
+        self.layer5 = nn.Conv2d(8*channels, 8*channels, kernel_size=4, stride=2, padding=1)
+        self.bn5 = nn.BatchNorm2d(channels * 8)
+        self.channel = channels
+
+        self.fc1 = nn.Linear(channels * 8 * 11 * 11, latent_size)
+        self.fc2 = nn.Linear(channels * 8 * 11 * 11, latent_size)
+
+        self.leakyrelu = nn.LeakyReLU()
+
+    def forward(self, x):
+        output = self.leakyrelu(self.bn1(self.layer1(x)))
+        # print(output.size())
+        output = self.leakyrelu(self.bn2(self.layer2(output)))
+        # print(output.size())
+        output = self.leakyrelu(self.bn3(self.layer3(output)))
+        # print(output.size())
+        output = self.leakyrelu(self.bn4(self.layer4(output)))
+        # print(output.size())
+        output = self.leakyrelu(self.bn4(self.layer5(output)))
+        output = output.view(-1, self.channel * 8 * 11 * 11)
+
+        mu = self.fc1(output)
+        logvar = self.fc2(output)
+        dist = Independent(Normal(loc=mu, scale=torch.exp(logvar)), 1)
+        # print(output.size())
+        # output = self.tanh(output)
+
+        return dist, mu, logvar
+
 class ChannelReducer(nn.Module):
     def __init__(self, in_channels, out_channels, reduction_ratio=16):
         super(ChannelReducer, self).__init__()
@@ -142,6 +233,8 @@ class GAT(torch.nn.Module):
         x = F.dropout(x, p=0.6, training=self.training)
         x = self.conv2(x, edge_index)
         return x
+
+
 class GATSegmentationModel(nn.Module):
     def __init__(self, training):
         super(GATSegmentationModel, self).__init__()
@@ -274,11 +367,11 @@ class GATSegmentationModel(nn.Module):
 #   print('{:<30}  {:<8}'.format('Number of parameters: ', params))
 
 
-# model = GATSegmentationModel(training=True).to(device)
-# tensor = torch.randn((batch_size, 3, 256, 256)).to(device)
-#
-# with torch.no_grad():
-#     out = model(tensor).to(device)
-#     print(out.shape)
-#
-# print('Done')
+model = GATSegmentationModel(training=True).to(device)
+tensor = torch.randn((batch_size, 3, 256, 256)).to(device)
+
+with torch.no_grad():
+    out = model(tensor).to(device)
+    print(out.shape)
+
+print('Done')
