@@ -234,6 +234,19 @@ class GAT(torch.nn.Module):
         x = self.conv2(x, edge_index)
         return x
 
+class BasicConv2d(nn.Module):
+    def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, dilation=1):
+        super(BasicConv2d, self).__init__()
+        self.conv = nn.Conv2d(in_planes, out_planes,
+                              kernel_size=kernel_size, stride=stride,
+                              padding=padding, dilation=dilation, bias=False)
+        self.bn = nn.BatchNorm2d(out_planes)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.bn(x)
+        return x
 
 class GATSegmentationModel(nn.Module):
     def __init__(self, training):
@@ -245,6 +258,8 @@ class GATSegmentationModel(nn.Module):
         self.training = training
         if self.training:
             self.initialize_weights()
+
+
 
         self.conv2_reduce = ChannelReducer(512, 64)
         self.conv3_reduce = ChannelReducer(1024, 64)
@@ -262,6 +277,12 @@ class GATSegmentationModel(nn.Module):
 
         self.up = nn.Upsample(size=(256, 256), mode='bilinear')
         self.conv_pred = nn.Conv2d(5,1,1)
+
+        #####
+        self.spatial_axes = [2, 3]
+        self.xy_encoder = Encoder_xy(7, self.channels, latent_dim=3)
+        self.x_encoder = Encoder_x(6, self.channels, latent_dim=3)
+        self.conv_depth1 = BasicConv2d(6 + 3, 3, kernel_size=3, padding=1)
 
     def image_to_graph(self, input, radius, size):
         height, width = input.shape[-2], input.shape[-1]
@@ -290,16 +311,33 @@ class GATSegmentationModel(nn.Module):
 
         return data
 
-    def forward(self, input):
-        x = self.resnet.conv1(input)
+    def forward(self, input, depth, gt):
+
+        z = torch.unsqueeze(gt, 2)
+        z = self.tile(z, 2, input.shape[self.spatial_axes[0]])
+        z = torch.unsqueeze(z, 3)
+        z = self.tile(z, 3, input.shape[self.spatial_axes[1]])
+        x = torch.cat((input, depth, z), 1)
+        x = self.conv_depth1(x)
+
+        x = self.resnet.conv1(x)
         x = self.resnet.bn1(x)
         x = self.resnet.relu(x)
         x = self.resnet.maxpool(x)
-
         x1 = self.resnet.layer1(x)  # 256 x 64 x 64
         x2 = self.resnet.layer2(x1)  # 512 x 32 x 32
         x3 = self.resnet.layer3(x2)  # 1024 x 16 x 16
         x4 = self.resnet.layer4(x3)  # 2048 x 8 x 8
+
+        # x = self.resnet.conv1(input)
+        # x = self.resnet.bn1(x)
+        # x = self.resnet.relu(x)
+        # x = self.resnet.maxpool(x)
+        #
+        # x1 = self.resnet.layer1(x)  # 256 x 64 x 64
+        # x2 = self.resnet.layer2(x1)  # 512 x 32 x 32
+        # x3 = self.resnet.layer3(x2)  # 1024 x 16 x 16
+        # x4 = self.resnet.layer4(x3)  # 2048 x 8 x 8
 
         x2 = self.conv2_reduce(x2)
         x3 = self.conv3_reduce(x3)
