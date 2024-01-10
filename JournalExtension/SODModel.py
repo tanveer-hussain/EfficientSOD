@@ -237,11 +237,11 @@ class GATSegmentationModel(nn.Module):
         print (input.size(0) * self.channels, input.size(0) * self.channels * 4, input.size(0) * self.channels * 4)
         y = self.wghted_attn(y2, y3, y4)
         print (y.shape)
-        # y = self.up(y)
-        # y = self.conv_pred(y)
+        y = self.up(y)
+        y = self.conv_pred(y)
 
 
-        return y4
+        return y
 
     def initialize_weights(self):
         print('Loading weights...')
