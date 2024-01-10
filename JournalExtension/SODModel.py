@@ -82,16 +82,16 @@ class ASPPModule(nn.Module):
         out = torch.cat((out1, out2, out3, out4, global_pool), dim=1)
         return out
 class WeightedFusionAttentionCNN(nn.Module):
-    def __init__(self, batch_size):
+    def __init__(self, batch_size, in_channels):
         super(WeightedFusionAttentionCNN, self).__init__()
 
         # Upsampling layers to match the final size
         self.up = nn.Upsample(size=(64, 64), mode='bilinear')
 
         # Convolutional layers for each input
-        self.conv2 = nn.Conv2d(768, 256, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(512, 256, kernel_size=3, padding=1)
-        self.conv4 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(batch_size * in_channels, 256, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(batch_size * in_channels * 4, 256, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(batch_size * in_channels * 4, 256, kernel_size=3, padding=1)
 
         # Attention mechanism
         self.attention = nn.Sequential(
@@ -110,9 +110,9 @@ class WeightedFusionAttentionCNN(nn.Module):
         x4 = self.up(x4)
 
         # Apply convolutional layers to each input
-        x2 = self.conv1(x2)
         x2 = self.conv2(x2)
         x3 = self.conv3(x3)
+        x4 = self.conv4(x4)
 
         # Concatenate the feature maps
         fused = torch.cat((x2, x3, x4), dim=1)
@@ -165,7 +165,7 @@ class GATSegmentationModel(nn.Module):
         #
         self.gatconv41 = GATConv(in_channels=64, hidden_channels=64, out_channels=self.channels, heads=4)
 
-        self.wghted_attn = WeightedFusionAttentionCNN()
+        self.wghted_attn = WeightedFusionAttentionCNN(batch_size, self.channels)
 
         self.up = nn.Upsample(size=(256, 256), mode='bilinear')
         self.conv_pred = nn.Conv2d(5,1,1)
@@ -234,8 +234,9 @@ class GATSegmentationModel(nn.Module):
         y4 = x4.view(-1, 8, 8).unsqueeze(0)
 
         print(y2.shape, y3.shape, y4.shape)
-        print (input.size(0) * self.channels,input.size(0) * self.channels * 4, input.size(0) * self.channels * 4)
-        # y = self.wghted_attn(y4, y3, y2, input.size(0))
+        print (input.size(0) * self.channels, input.size(0) * self.channels * 4, input.size(0) * self.channels * 4)
+        y = self.wghted_attn(y2, y3, y4)
+        print (y.shape)
         # y = self.up(y)
         # y = self.conv_pred(y)
 
