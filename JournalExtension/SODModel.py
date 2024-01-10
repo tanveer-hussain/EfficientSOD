@@ -9,6 +9,7 @@ from ResNet import B2_ResNet
 import torchvision.models as models
 
 from torch.distributions import Normal, Independent, kl
+import numpy as np
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -280,8 +281,8 @@ class GATSegmentationModel(nn.Module):
 
         #####
         self.spatial_axes = [2, 3]
-        self.xy_encoder = Encoder_xy(7, self.channels, latent_dim=3)
-        self.x_encoder = Encoder_x(6, self.channels, latent_dim=3)
+        self.xy_encoder = Encoder_xy(7, self.channels, latent_size=3)
+        self.x_encoder = Encoder_x(6, self.channels, latent_size=3)
         self.conv_depth1 = BasicConv2d(6 + 3, 3, kernel_size=3, padding=1)
 
     def image_to_graph(self, input, radius, size):
@@ -310,6 +311,19 @@ class GATSegmentationModel(nn.Module):
         data = Data(x=x, edge_index=edge_index)
 
         return data
+
+    def tile(self, a, dim, n_tile):
+        """
+        This function is taken form PyTorch forum and mimics the behavior of tf.tile.
+        Source: https://discuss.pytorch.org/t/how-to-tile-a-tensor/13853/3
+        """
+        init_dim = a.size(dim)
+        repeat_idx = [1] * a.dim()
+        repeat_idx[dim] = n_tile
+        a = a.repeat(*(repeat_idx))
+        order_index = torch.LongTensor(np.concatenate([init_dim * np.arange(n_tile) + i for i in range(init_dim)])).to(
+            device)
+        return torch.index_select(a, dim, order_index)
 
     def forward(self, input, depth, gt):
 
@@ -407,9 +421,11 @@ class GATSegmentationModel(nn.Module):
 
 model = GATSegmentationModel(training=True).to(device)
 tensor = torch.randn((batch_size, 3, 256, 256)).to(device)
+depth = torch.randn((batch_size, 3, 256, 256)).to(device)
+gt = torch.randn((batch_size, 1, 256, 256)).to(device)
 
 with torch.no_grad():
-    out = model(tensor).to(device)
+    out = model(tensor, depth, gt)
     print(out.shape)
 
 print('Done')
