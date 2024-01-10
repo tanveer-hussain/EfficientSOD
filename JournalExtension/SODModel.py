@@ -10,6 +10,7 @@ import torchvision.models as models
 
 from torch.distributions import Normal, Independent, kl
 import numpy as np
+from torch.autograd import Variable
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -325,7 +326,7 @@ class GATSegmentationModel(nn.Module):
             device)
         return torch.index_select(a, dim, order_index)
 
-    def forward(self, input, depth, gt):
+    def forward(self, input, depth, z):
 
         z = torch.unsqueeze(gt, 2)
         z = self.tile(z, 2, input.shape[self.spatial_axes[0]])
@@ -407,6 +408,46 @@ class GATSegmentationModel(nn.Module):
         assert len(all_params.keys()) == len(self.resnet.state_dict().keys())
         print(self.resnet.load_state_dict(all_params))
 
+class Generator(nn.Module):
+    def __init__(self, channel, latent_dim):
+        super(Generator, self).__init__()
+        self.relu = nn.ReLU(inplace=True)
+        self.sal_encoder = GATSegmentationModel(training=True)
+        self.upsample4 = nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False)
+        self.upsample2 = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
+        self.xy_encoder = Encoder_xy(7, channel, latent_dim)
+        self.x_encoder = Encoder_x(6, channel, latent_dim)
+        self.tanh = nn.Tanh()
+
+    def _make_pred_layer(self, block, dilation_series, padding_series, NoLabels, input_channel):
+        return block(dilation_series, padding_series, NoLabels, input_channel)
+
+    def kl_divergence(self, posterior_latent_space, prior_latent_space):
+        kl_div = kl.kl_divergence(posterior_latent_space, prior_latent_space)
+        return kl_div
+
+    def reparametrize(self, mu, logvar):
+        std = logvar.mul(0.5).exp_()
+        #eps = torch.cuda.FloatTensor(std.size()).normal_()
+        eps = torch.FloatTensor(std.size()).normal_()
+        eps = Variable(eps)
+        return eps.mul(std).add_(mu)
+
+    def forward(self, x, depth, y=None, training=True):
+        if training:
+            self.posterior, muxy, logvarxy = self.xy_encoder(torch.cat((x,depth,y),1))
+            self.prior, mux, logvarx = self.x_encoder(torch.cat((x,depth),1))
+            lattent_loss = torch.mean(self.kl_divergence(self.posterior, self.prior))
+            z_noise_post = self.reparametrize(muxy, logvarxy)
+            z_noise_prior = self.reparametrize(mux, logvarx)
+            self.prob_pred_post, self.depth_pred_post  = self.sal_encoder(x,depth,z_noise_post)
+            self.prob_pred_prior, self.depth_pred_prior = self.sal_encoder(x, depth, z_noise_prior)
+            return self.prob_pred_post, self.prob_pred_prior, lattent_loss, self.depth_pred_post, self.depth_pred_prior
+        else:
+            _, mux, logvarx = self.x_encoder(torch.cat((x,depth),1))
+            z_noise = self.reparametrize(mux, logvarx)
+            self.prob_pred,_  = self.sal_encoder(x,depth,z_noise)
+            return self.prob_pred
 
 # from ptflops import get_model_complexity_info
 
@@ -419,13 +460,14 @@ class GATSegmentationModel(nn.Module):
 #   print('{:<30}  {:<8}'.format('Number of parameters: ', params))
 
 
-model = GATSegmentationModel(training=True).to(device)
-tensor = torch.randn((batch_size, 3, 256, 256)).to(device)
-depth = torch.randn((batch_size, 3, 256, 256)).to(device)
-gt = torch.randn((batch_size, 1, 256, 256)).to(device)
+batch_size = 2
+model = Generator(32,3).to(device)
+tensor = torch.randn((batch_size, 3, 352, 352)).to(device)
+depth = torch.randn((batch_size, 3, 352, 352)).to(device)
+gt = torch.randn((batch_size, 1, 352, 352)).to(device)
 
 with torch.no_grad():
     out = model(tensor, depth, gt)
-    print(out.shape)
+    #print(out.shape)
 
 print('Done')
