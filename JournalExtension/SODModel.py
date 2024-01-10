@@ -233,10 +233,7 @@ class GATSegmentationModel(nn.Module):
         # x4 = F.relu(self.gatconv42(x4, edge_index4))
         y4 = x4.view(-1, 8, 8).unsqueeze(0)
 
-        print(y2.shape, y3.shape, y4.shape)
-        print (input.size(0) * self.channels, input.size(0) * self.channels * 4, input.size(0) * self.channels * 4)
         y = self.wghted_attn(y2, y3, y4)
-        print (y.shape)
         y = self.up(y)
         y = self.conv_pred(y)
 
