@@ -14,36 +14,21 @@ def count_parameters(model):
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+def l2_regularisation(m):
+    l2_reg = None
 
-from scipy import misc
+    for W in m.parameters():
+        if l2_reg is None:
+            l2_reg = W.norm(2)
+        else:
+            l2_reg = l2_reg + W.norm(2)
+    return l2_reg
 
-
-def visualize_uncertainty_prior_init(var_map):
-    for kk in range(var_map.shape[0]):
-        pred_edge_kk = var_map[kk, :, :, :]
-        pred_edge_kk = pred_edge_kk.detach().cpu().numpy().squeeze()
-        # pred_edge_kk = (pred_edge_kk - pred_edge_kk.min()) / (pred_edge_kk.max() - pred_edge_kk.min() + 1e-8)
-        pred_edge_kk *= 255.0
-        pred_edge_kk = pred_edge_kk.astype(np.uint8)
-        save_path = './temp/'
-        name = '{:02d}_prior_int.png'.format(kk)
-        misc.imsave(save_path + name, pred_edge_kk)
-
-
-def visualize_gt(var_map):
-    for kk in range(var_map.shape[0]):
-        pred_edge_kk = var_map[kk, :, :, :]
-        pred_edge_kk = pred_edge_kk.detach().cpu().numpy().squeeze()
-        # pred_edge_kk = (pred_edge_kk - pred_edge_kk.min()) / (pred_edge_kk.max() - pred_edge_kk.min() + 1e-8)
-        pred_edge_kk *= 255.0
-        pred_edge_kk = pred_edge_kk.astype(np.uint8)
-        save_path = './temp/'
-        name = '{:02d}_gt.png'.format(kk)
-        misc.imsave(save_path + name, pred_edge_kk)
-
-
-CE = torch.nn.BCELoss().to(device)
-mse_loss = torch.nn.MSELoss(size_average=True, reduce=True).to(device)
+## define loss
+import smoothness
+CE = torch.nn.BCELoss()
+mse_loss = torch.nn.MSELoss(size_average=True, reduce=True)
+smooth_loss = smoothness.smoothness_loss(size_average=True)
 
 
 def structure_loss(pred, mask):
@@ -87,44 +72,55 @@ def visualize_gt(var_map):
         imageio.imsave(save_path + name, pred_edge_kk)
 
 
-def train(model, opt, crit, train_loader, epoch, epochs):
+
+
+## linear annealing to avoid posterior collapse
+def linear_annealing(init, fin, step, annealing_steps):
+    """Linear annealing of a parameter."""
+    if annealing_steps == 0:
+        return fin
+    assert fin > init
+    delta = fin - init
+    annealed = min(init + delta * step / annealing_steps, fin)
+    return annealed
+
+def train(generator, generator_optimizer, crit, train_loader, epoch, epochs):
     model.train()
-    for i, (X, Y) in enumerate(train_loader):
+    for i, (images, gts, depths) in enumerate(train_loader):
         print(f'Epoch [{epoch}/{epochs}], Step [{i}/{len(train_loader)}]')
-        X = X.to(device)
-        Y = Y.to(device)
+        images = images.to(device)
+        gts = gts.to(device)
+        depths = depths.to(device)
 
-        output = torch.sigmoid(model(X))  # .sigmoid()
 
-        visualize_gt(Y)
-        visualize_output(output)
+        pred_post, pred_prior, latent_loss, depth_pred_post, depth_pred_prior = generator.forward(images, depths, gts)
 
-        struct_loss = structure_loss(output, Y).to(device)
-        # ce_loss = CE(output, Y)
-        # mse = mse_loss(output,Y)
+        ## l2 regularizer the inference model
+        reg_loss = l2_regularisation(generator.xy_encoder) + \
+                   l2_regularisation(generator.x_encoder) + l2_regularisation(generator.sal_encoder)
+        smoothLoss_post = opt.sm_weight * smooth_loss(torch.sigmoid(pred_post), gts)
+        reg_loss = opt.reg_weight * reg_loss
+        latent_loss = latent_loss
+        depth_loss_post = opt.depth_loss_weight * mse_loss(torch.sigmoid(depth_pred_post), depths)
+        sal_loss = structure_loss(pred_post, gts) + smoothLoss_post + depth_loss_post
+        anneal_reg = linear_annealing(0, 1, epoch, opt.epoch)
+        latent_loss = opt.lat_weight * anneal_reg * latent_loss
+        gen_loss_cvae = sal_loss + latent_loss
+        gen_loss_cvae = opt.vae_loss_weight * gen_loss_cvae
 
-        # loss = 0.2 * reg_loss + 0.2 * ce_loss + 0.2 * struct_loss + 0.4 * mse
-        loss = crit(output, Y) + struct_loss
-        # print (loss)
+        smoothLoss_prior = opt.sm_weight * smooth_loss(torch.sigmoid(pred_prior), gts)
+        depth_loss_prior = opt.depth_loss_weight * mse_loss(torch.sigmoid(depth_pred_prior), depths)
+        gen_loss_gsnn = structure_loss(pred_prior, gts) + smoothLoss_prior + depth_loss_prior
+        gen_loss_gsnn = (1 - opt.vae_loss_weight) * gen_loss_gsnn
+        gen_loss = gen_loss_cvae + gen_loss_gsnn + reg_loss
 
-        # scale_pred = output[0].sigmoid()
-        # scale_pred = F.interpolate(output[0], size=(h, w), mode='bilinear', align_corners=True) #(input=output[0], size=(h, w), mode='bilinear', align_corners=True)
-        # # print (scale_pred.shape, Y.shape)
+        generator_optimizer.zero_grad()
+        gen_loss.backward()
+        generator_optimizer.step()
 
-        # loss1 = crit(scale_pred, Y) # this is for loss comparison
 
-        # scale_pred = output[1].sigmoid()
-        # scale_pred = F.interpolate(output[1], size=(h, w), mode='bilinear', align_corners=True) #F.upsample(input=output[1], size=(h, w), mode='bilinear', align_corners=True)
 
-        # loss2 = crit(scale_pred, Y) # this is for loss comparison
-
-        # loss = loss1 + loss2 * 0.4
-
-        opt.zero_grad()
-        loss.backward()
-        opt.step()
-
-    return loss.item()
+    return gen_loss.item()
 
 
 def main():
@@ -135,12 +131,15 @@ def main():
     print('Device name: .... ', cuda.get_device_name(cuda.current_device()), ', available >', cuda.is_available())
 
     # model = BaseNetwork_3.DenseNetBackbone()
-    model = SODModel.GATSegmentationModel(training=True)
+    generator = Generator(channel=feat_channel, latent_dim=latent_dim)
+    generator.to(device)
 
-    model = nn.DataParallel(model)
+    generator_params = generator.parameters()
+    generator_optimizer = torch.optim.Adam(generator_params, lr_gen, betas=[beta1_gen, 0.999])
+
+    generator = nn.DataParallel(generator)
 
     cudnn.benchmark = True
-    model.to(device)
     # print(count_parameters(model))
 
     base_lr = 0.0001
@@ -149,12 +148,8 @@ def main():
     k = 0
     total_loss = []
 
-    optimizerr = torch.optim.Adam(model.parameters(), lr=base_lr, weight_decay=weight_decay, betas=(0.9, 0.95))
-    # criterion = nn.SmoothL1Loss().to(device) #
-    criterion = nn.MSELoss().to(device)
-    # criterion = CriterionDSN().to(device)
 
-    print('Model on GPU: ', next(model.parameters()).is_cuda)
+    print('Model on GPU: ', next(generator.parameters()).is_cuda)
 
     dataset_path = r'/home/hussaint/SODDatasets/' + current_dataset
     d_type = ['Train', 'Test']
@@ -166,15 +161,15 @@ def main():
 
     for epoch in range(0, epochs):
 
-        current_loss = train(model, optimizerr, criterion, train_loader, epoch, epochs)
+        current_loss = train(generator, generator_optimizer, None, train_loader, epoch, epochs)
         # if epoch%2 == 0:
         print("Epoch: %d of %d, loss: %f" % (epoch, epochs, current_loss))
         total_loss.append(current_loss)
 
         if epoch % 25 == 24 or epoch == epochs:
             print('Saving model and weights...')
-            torch.save(model, 'DDNet' + current_dataset + '_' + str(epoch) + '.pt')
-            torch.save(model.state_dict(), 'DDNetWts_' + current_dataset + '_' + str(epoch) + '.pt')
+            torch.save(generator, 'DDNet' + current_dataset + '_' + str(epoch) + '.pt')
+            torch.save(generator.state_dict(), 'DDNetWts_' + current_dataset + '_' + str(epoch) + '.pt')
 
 
 if __name__ == '__main__':
