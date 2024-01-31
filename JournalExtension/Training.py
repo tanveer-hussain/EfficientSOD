@@ -1,7 +1,7 @@
 import torch
 from torch import nn, cuda
 from DataGenerator import DatasetLoader
-from ModelNetworks import SODModel
+from SODModel import Generator
 from torch.utils.data import Dataset, DataLoader
 import torch.backends.cudnn as cudnn
 import matplotlib.pyplot as plt
@@ -98,20 +98,20 @@ def train(generator, generator_optimizer, crit, train_loader, epoch, epochs):
         ## l2 regularizer the inference model
         reg_loss = l2_regularisation(generator.xy_encoder) + \
                    l2_regularisation(generator.x_encoder) + l2_regularisation(generator.sal_encoder)
-        smoothLoss_post = opt.sm_weight * smooth_loss(torch.sigmoid(pred_post), gts)
-        reg_loss = opt.reg_weight * reg_loss
+        smoothLoss_post = 0.1 * smooth_loss(torch.sigmoid(pred_post), gts)
+        reg_loss = 1e-4 * reg_loss
         latent_loss = latent_loss
-        depth_loss_post = opt.depth_loss_weight * mse_loss(torch.sigmoid(depth_pred_post), depths)
+        depth_loss_post = 0.1 * mse_loss(torch.sigmoid(depth_pred_post), depths)
         sal_loss = structure_loss(pred_post, gts) + smoothLoss_post + depth_loss_post
-        anneal_reg = linear_annealing(0, 1, epoch, opt.epoch)
-        latent_loss = opt.lat_weight * anneal_reg * latent_loss
+        anneal_reg = linear_annealing(0, 1, epoch, epochs)
+        latent_loss = 10.0 * anneal_reg * latent_loss
         gen_loss_cvae = sal_loss + latent_loss
-        gen_loss_cvae = opt.vae_loss_weight * gen_loss_cvae
+        gen_loss_cvae = 0.4* gen_loss_cvae
 
-        smoothLoss_prior = opt.sm_weight * smooth_loss(torch.sigmoid(pred_prior), gts)
-        depth_loss_prior = opt.depth_loss_weight * mse_loss(torch.sigmoid(depth_pred_prior), depths)
+        smoothLoss_prior = 0.1 * smooth_loss(torch.sigmoid(pred_prior), gts)
+        depth_loss_prior = 0.1 * mse_loss(torch.sigmoid(depth_pred_prior), depths)
         gen_loss_gsnn = structure_loss(pred_prior, gts) + smoothLoss_prior + depth_loss_prior
-        gen_loss_gsnn = (1 - opt.vae_loss_weight) * gen_loss_gsnn
+        gen_loss_gsnn = (1 - 0.4) * gen_loss_gsnn
         gen_loss = gen_loss_cvae + gen_loss_gsnn + reg_loss
 
         generator_optimizer.zero_grad()
@@ -131,12 +131,12 @@ def main():
     print('Device name: .... ', cuda.get_device_name(cuda.current_device()), ', available >', cuda.is_available())
 
     # model = BaseNetwork_3.DenseNetBackbone()
-    generator = Generator(channel=feat_channel, latent_dim=latent_dim)
+    generator = Generator(channel=32, latent_dim=3)
     generator.to(device)
     generator.train()
 
     generator_params = generator.parameters()
-    generator_optimizer = torch.optim.Adam(generator_params, lr_gen, betas=[beta1_gen, 0.999])
+    generator_optimizer = torch.optim.Adam(generator_params, 5e-5, betas=[0.5, 0.999])
 
     generator = nn.DataParallel(generator)
 
@@ -156,7 +156,7 @@ def main():
     d_type = ['Train', 'Test']
 
     train_data = DatasetLoader(dataset_path, d_type[0])
-    train_loader = DataLoader(train_data, batch_size=8, shuffle=True, num_workers=16, drop_last=True)
+    train_loader = DataLoader(train_data, batch_size=4, shuffle=True, num_workers=8, drop_last=True)
 
     print('Training...')
 

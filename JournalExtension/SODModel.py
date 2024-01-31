@@ -259,7 +259,7 @@ class ASPPModule(nn.Module):
         out = torch.cat((out1, out2, out3, out4, global_pool), dim=1)
         return out
 class WeightedFusionAttentionCNN(nn.Module):
-    def __init__(self, batch_size, in_channels):
+    def __init__(self, in_channels):
         super(WeightedFusionAttentionCNN, self).__init__()
 
         # Upsampling layers to match the final size
@@ -361,7 +361,7 @@ class Saliency_feat_encoder(nn.Module):
         #
         self.gatconv41 = GATConv(in_channels=64, hidden_channels=64, out_channels=self.channels, heads=4)
 
-        self.wghted_attn = WeightedFusionAttentionCNN(batch_size, self.channels)
+        self.wghted_attn = WeightedFusionAttentionCNN(self.channels)
 
         self.up = nn.Upsample(size=(256, 256), mode='bilinear')
         self.conv_pred = nn.Conv2d(5,1,1)
@@ -514,5 +514,6 @@ gt = torch.randn((batch_size, 1, 352, 352)).to(device)
 with torch.no_grad():
     out = model(tensor, depth, gt)
     #print(out.shape)
+
 
 print('Done')
