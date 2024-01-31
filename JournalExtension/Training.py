@@ -85,7 +85,7 @@ def linear_annealing(init, fin, step, annealing_steps):
     return annealed
 
 def train(generator, generator_optimizer, crit, train_loader, epoch, epochs):
-    model.train()
+
     for i, (images, gts, depths) in enumerate(train_loader):
         print(f'Epoch [{epoch}/{epochs}], Step [{i}/{len(train_loader)}]')
         images = images.to(device)
@@ -133,6 +133,7 @@ def main():
     # model = BaseNetwork_3.DenseNetBackbone()
     generator = Generator(channel=feat_channel, latent_dim=latent_dim)
     generator.to(device)
+    generator.train()
 
     generator_params = generator.parameters()
     generator_optimizer = torch.optim.Adam(generator_params, lr_gen, betas=[beta1_gen, 0.999])
