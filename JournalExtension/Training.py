@@ -119,6 +119,7 @@ def train(generator, generator_optimizer, crit, train_loader, epoch, epochs):
         generator_optimizer.step()
 
         visualize_gt(gts)
+        visualize_uncertainty_post_init(torch.sigmoid(pred_post))
         visualize_uncertainty_prior_init(torch.sigmoid(pred_prior))
 
 
@@ -185,7 +186,7 @@ def main():
     # print(count_parameters(model))
 
     base_lr = 0.0001
-    epochs = 10
+    epochs = 100
     weight_decay = 1e-3
     k = 0
     total_loss = []

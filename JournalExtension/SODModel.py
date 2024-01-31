@@ -52,7 +52,7 @@ class BasicConv2d(nn.Module):
                               kernel_size=kernel_size, stride=stride,
                               padding=padding, dilation=dilation, bias=False)
         self.bn = nn.BatchNorm2d(out_planes)
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.ReLU(inplace=False)
 
     def forward(self, x):
         x = self.conv(x)
@@ -65,7 +65,7 @@ class Encoder_x(nn.Module):
         super(Encoder_x, self).__init__()
         self.contracting_path = nn.ModuleList()
         self.input_channels = input_channels
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.ReLU(inplace=False)
         self.layer1 = nn.Conv2d(input_channels, channels, kernel_size=4, stride=2, padding=1)
         self.bn1 = nn.BatchNorm2d(channels)
         self.layer2 = nn.Conv2d(channels, 2*channels, kernel_size=4, stride=2, padding=1)
@@ -110,7 +110,7 @@ class Encoder_xy(nn.Module):
         super(Encoder_xy, self).__init__()
         self.contracting_path = nn.ModuleList()
         self.input_channels = input_channels
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.ReLU(inplace=False)
         self.layer1 = nn.Conv2d(input_channels, channels, kernel_size=4, stride=2, padding=1)
         self.bn1 = nn.BatchNorm2d(channels)
         self.layer2 = nn.Conv2d(channels, 2*channels, kernel_size=4, stride=2, padding=1)
@@ -151,7 +151,7 @@ class Encoder_xy(nn.Module):
 class Generator(nn.Module):
     def __init__(self, channel, latent_dim):
         super(Generator, self).__init__()
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.ReLU(inplace=False)
         self.sal_encoder = Saliency_feat_encoder(channel, latent_dim)
         self.upsample4 = nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False)
         self.upsample2 = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
@@ -210,7 +210,7 @@ class ChannelReducer(nn.Module):
         return nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Conv2d(in_channels, in_channels // reduction_ratio, kernel_size=1),
-            nn.ReLU(inplace=True),
+            nn.ReLU(inplace=False),
             nn.Conv2d(in_channels // reduction_ratio, in_channels, kernel_size=1),
             nn.Sigmoid()
         )
@@ -327,7 +327,7 @@ class BasicConv2d(nn.Module):
                               kernel_size=kernel_size, stride=stride,
                               padding=padding, dilation=dilation, bias=False)
         self.bn = nn.BatchNorm2d(out_planes)
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.ReLU(inplace=False)
 
     def forward(self, x):
         x = self.conv(x)
@@ -336,6 +336,22 @@ class BasicConv2d(nn.Module):
 
 from torch_geometric.nn import GATConv
 from torch_geometric.data import Data
+
+class Classifier_Module(nn.Module):
+    def __init__(self,dilation_series,padding_series,NoLabels, input_channel):
+        super(Classifier_Module, self).__init__()
+        self.conv2d_list = nn.ModuleList()
+        for dilation,padding in zip(dilation_series,padding_series):
+            self.conv2d_list.append(nn.Conv2d(input_channel,NoLabels,kernel_size=3,stride=1, padding =padding, dilation = dilation,bias = True))
+        for m in self.conv2d_list:
+            m.weight.data.normal_(0, 0.01)
+
+    def forward(self, x):
+        out = self.conv2d_list[0](x)
+        for i in range(len(self.conv2d_list)-1):
+            out += self.conv2d_list[i+1](x)
+        return out
+    
 class Saliency_feat_encoder(nn.Module):
     def __init__(self, channel, latent_dim):
         super(Saliency_feat_encoder, self).__init__()
@@ -363,7 +379,7 @@ class Saliency_feat_encoder(nn.Module):
 
         self.wghted_attn = WeightedFusionAttentionCNN(self.channels)
 
-        self.up = nn.Upsample(size=(256, 256), mode='bilinear')
+        self.up = nn.Upsample(size=(352, 352), mode='bilinear')
         self.conv_pred = nn.Conv2d(5,1,1)
 
         #####
@@ -371,6 +387,16 @@ class Saliency_feat_encoder(nn.Module):
         self.xy_encoder = Encoder_xy(7, self.channels, latent_size=3)
         self.x_encoder = Encoder_x(6, self.channels, latent_size=3)
         self.conv_depth1 = BasicConv2d(6 + 3, 3, kernel_size=3, padding=1)
+
+
+        self.upsample8 = nn.Upsample(scale_factor=8, mode='bilinear', align_corners=True)
+        self.upsample4 = nn.Upsample(scale_factor=4, mode='bilinear', align_corners=True)
+        self.upsample2 = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        self.conv1_depth = BasicConv2d(256, channel, kernel_size=1)
+        self.conv2_depth = BasicConv2d(512, channel, kernel_size=1)
+        self.conv3_depth = BasicConv2d(1024, channel, kernel_size=1)
+        self.conv4_depth = BasicConv2d(2048, channel, kernel_size=1)
+        self.layer_depth = self._make_pred_layer(Classifier_Module, [6, 12, 18, 24], [6, 12, 18, 24], 3, channel * 4)
 
     def image_to_graph(self, input, radius, size):
         height, width = input.shape[-2], input.shape[-1]
@@ -398,6 +424,9 @@ class Saliency_feat_encoder(nn.Module):
         data = Data(x=x, edge_index=edge_index)
 
         return data
+    
+    def _make_pred_layer(self, block, dilation_series, padding_series, NoLabels, input_channel):
+        return block(dilation_series, padding_series, NoLabels, input_channel)
 
     def tile(self, a, dim, n_tile):
         """
@@ -429,6 +458,15 @@ class Saliency_feat_encoder(nn.Module):
         x2 = self.resnet.layer2(x1)  # 512 x 32 x 32
         x3 = self.resnet.layer3(x2)  # 1024 x 16 x 16
         x4 = self.resnet.layer4(x3)  # 2048 x 8 x 8
+
+
+        ## depth estimation
+        conv1_depth = self.conv1_depth(x1)
+        conv2_depth = self.upsample2(self.conv2_depth(x2))
+        conv3_depth = self.upsample4(self.conv3_depth(x3))
+        conv4_depth = self.upsample8(self.conv4_depth(x4))
+        conv_depth = torch.cat((conv4_depth, conv3_depth, conv2_depth, conv1_depth), 1)
+        depth_pred = self.layer_depth(conv_depth)
 
         # x = self.resnet.conv1(input)
         # x = self.resnet.bn1(x)
@@ -464,15 +502,19 @@ class Saliency_feat_encoder(nn.Module):
         # # x4 = F.dropout(x4, p=0.5, training=self.training)
         # # x4 = F.relu(self.gatconv42(x4, edge_index4))
         # y4 = x4.view(-1, 8, 8).unsqueeze(0)
-        print (x2.shape, x3.shape, x4.shape)
+        # print (x2.shape, x3.shape, x4.shape)
 
-        # y = self.wghted_attn(x2, x3, x4)
-        #
-        # y = self.up(y)
-        # y = self.conv_pred(y)
+        y = self.wghted_attn(x2, x3, x4)
+        
+        y = self.up(y)
+        y = self.conv_pred(y)
+
+        depth_pred = self.upsample4(depth_pred)
+
+        # print (y.shape, depth_pred.shape)
 
 
-        return x4
+        return y, depth_pred
 
     def initialize_weights(self):
         print('Loading weights...')
@@ -505,15 +547,15 @@ class Saliency_feat_encoder(nn.Module):
 #   print('{:<30}  {:<8}'.format('Number of parameters: ', params))
 
 
-batch_size = 2
-model = Generator(32,3).to(device)
-tensor = torch.randn((batch_size, 3, 352, 352)).to(device)
-depth = torch.randn((batch_size, 3, 352, 352)).to(device)
-gt = torch.randn((batch_size, 1, 352, 352)).to(device)
+# batch_size = 8
+# model = Generator(32,3).to(device)
+# tensor = torch.randn((batch_size, 3, 352, 352)).to(device)
+# depth = torch.randn((batch_size, 3, 352, 352)).to(device)
+# gt = torch.randn((batch_size, 1, 352, 352)).to(device)
 
-with torch.no_grad():
-    out = model(tensor, depth, gt)
-    #print(out.shape)
+# with torch.no_grad():
+#     out = model.forward(tensor, depth, gt)
+#     # print(out[0].shape)
 
 
-print('Done')
+# print('Done')
