@@ -118,9 +118,50 @@ def train(generator, generator_optimizer, crit, train_loader, epoch, epochs):
         gen_loss.backward()
         generator_optimizer.step()
 
+        visualize_gt(gts)
+        visualize_uncertainty_prior_init(torch.sigmoid(pred_prior))
+
 
 
     return gen_loss.item()
+
+import imageio
+
+def visualize_uncertainty_post_init(var_map):
+
+    for kk in range(var_map.shape[0]):
+        pred_edge_kk = var_map[kk,:,:,:]
+        pred_edge_kk = pred_edge_kk.detach().cpu().numpy().squeeze()
+        # pred_edge_kk = (pred_edge_kk - pred_edge_kk.min()) / (pred_edge_kk.max() - pred_edge_kk.min() + 1e-8)
+        pred_edge_kk *= 255.0
+        pred_edge_kk = pred_edge_kk.astype(np.uint8)
+        save_path = './temp/'
+        name = '{:02d}_post_int.png'.format(kk)
+        imageio.imwrite(save_path + name, pred_edge_kk)
+
+def visualize_uncertainty_prior_init(var_map):
+
+    for kk in range(var_map.shape[0]):
+        pred_edge_kk = var_map[kk,:,:,:]
+        pred_edge_kk = pred_edge_kk.detach().cpu().numpy().squeeze()
+        # pred_edge_kk = (pred_edge_kk - pred_edge_kk.min()) / (pred_edge_kk.max() - pred_edge_kk.min() + 1e-8)
+        pred_edge_kk *= 255.0
+        pred_edge_kk = pred_edge_kk.astype(np.uint8)
+        save_path = 'temp/'
+        name = '{:02d}_prior_int.png'.format(kk)
+        imageio.imwrite(save_path + name, pred_edge_kk)
+
+def visualize_gt(var_map):
+
+    for kk in range(var_map.shape[0]):
+        pred_edge_kk = var_map[kk,:,:,:]
+        pred_edge_kk = pred_edge_kk.detach().cpu().numpy().squeeze()
+        # pred_edge_kk = (pred_edge_kk - pred_edge_kk.min()) / (pred_edge_kk.max() - pred_edge_kk.min() + 1e-8)
+        pred_edge_kk *= 255.0
+        pred_edge_kk = pred_edge_kk.astype(np.uint8)
+        save_path = 'temp/'
+        name = '{:02d}_gt.png'.format(kk)
+        imageio.imwrite(save_path + name, pred_edge_kk)
 
 
 def main():
@@ -138,7 +179,7 @@ def main():
     generator_params = generator.parameters()
     generator_optimizer = torch.optim.Adam(generator_params, 5e-5, betas=[0.5, 0.999])
 
-    generator = nn.DataParallel(generator)
+    # generator = nn.DataParallel(generator)
 
     cudnn.benchmark = True
     # print(count_parameters(model))
@@ -156,7 +197,7 @@ def main():
     d_type = ['Train', 'Test']
 
     train_data = DatasetLoader(dataset_path, d_type[0])
-    train_loader = DataLoader(train_data, batch_size=4, shuffle=True, num_workers=8, drop_last=True)
+    train_loader = DataLoader(train_data, batch_size=8, shuffle=True, num_workers=8, drop_last=True)
 
     print('Training...')
 
