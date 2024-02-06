@@ -229,15 +229,22 @@ class VisionTransformer(nn.Module):
         x = self.ln_pre(x)
 
         x = x.permute(1, 0, 2)  # NLD -> LND
-        x = self.transformer(x)
+        temp = x = self.transformer(x) # Tinu
+        temp = temp.permute(1, 2, 0)
+        temp = temp[:, :49, :] # Tinu
         x = x.permute(1, 0, 2)  # LND -> NLD
+
+        #
+
+
+        print ('...', temp.shape)
 
         x = self.ln_post(x[:, 0, :])
 
         if self.proj is not None:
             x = x @ self.proj
 
-        return x
+        return x, temp
 
 
 class CLIP(nn.Module):
@@ -356,7 +363,8 @@ class CLIP(nn.Module):
         return x
 
     def forward(self, image, text):
-        image_features = self.encode_image(image)
+        image_features, temp = self.encode_image(image)
+        print (temp.shape)
         text_features = self.encode_text(text)
 
         # normalized features
