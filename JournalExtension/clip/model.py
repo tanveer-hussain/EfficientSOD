@@ -230,8 +230,9 @@ class VisionTransformer(nn.Module):
 
         x = x.permute(1, 0, 2)  # NLD -> LND
         temp = x = self.transformer(x) # Tinu
+        print('>>>', temp.shape)
         temp = temp.permute(1, 2, 0)
-        temp = temp[:, :49, :] # Tinu
+        temp = temp[:, :, :49] # Tinu
         x = x.permute(1, 0, 2)  # LND -> NLD
 
         #
