@@ -232,11 +232,11 @@ class VisionTransformer(nn.Module):
         temp = x = self.transformer(x) # Tinu
         temp = temp.permute(1, 2, 0) # Tinu
         temp = temp[:, :, :49] # Tinu
-        temp = temp.view(1, 768, 7, 7)
+        temp = temp.view(temp.shape[0], 768, 7, 7) # Tinu
 
         x = x.permute(1, 0, 2)  # LND -> NLD
 
-        print ('...', temp.shape)
+        # print ('...', temp.shape)
 
         x = self.ln_post(x[:, 0, :])
 
@@ -363,7 +363,7 @@ class CLIP(nn.Module):
 
     def forward(self, image, text):
         image_features, temp = self.encode_image(image)
-        print (temp.shape)
+        # print (temp.shape)
         text_features = self.encode_text(text)
 
         # normalized features
@@ -376,7 +376,7 @@ class CLIP(nn.Module):
         logits_per_text = logits_per_image.t()
 
         # shape = [global_batch_size, global_batch_size]
-        return logits_per_image, logits_per_text
+        return logits_per_image, logits_per_text, temp
 
 
 def convert_weights(model: nn.Module):

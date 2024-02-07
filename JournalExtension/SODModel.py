@@ -7,6 +7,7 @@ from torch.autograd import Variable
 from torch.nn import Parameter, Softmax
 import torch.nn.functional as F
 from torch.distributions import Normal, Independent, kl
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
@@ -31,18 +32,20 @@ def truncated_normal_(tensor, mean=0, std=1):
     tensor.data.copy_(tmp.gather(-1, ind).squeeze(-1))
     tensor.data.mul_(std).add_(mean)
 
+
 def init_weights(m):
     if type(m) == nn.Conv2d or type(m) == nn.ConvTranspose2d:
         nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
-        #nn.init.normal_(m.weight, std=0.001)
-        #nn.init.normal_(m.bias, std=0.001)
+        # nn.init.normal_(m.weight, std=0.001)
+        # nn.init.normal_(m.bias, std=0.001)
         truncated_normal_(m.bias, mean=0, std=0.001)
+
 
 def init_weights_orthogonal_normal(m):
     if type(m) == nn.Conv2d or type(m) == nn.ConvTranspose2d:
         nn.init.orthogonal_(m.weight)
         truncated_normal_(m.bias, mean=0, std=0.001)
-        #nn.init.normal_(m.bias, std=0.001)
+        # nn.init.normal_(m.bias, std=0.001)
 
 
 class BasicConv2d(nn.Module):
@@ -68,18 +71,18 @@ class Encoder_x(nn.Module):
         self.relu = nn.ReLU(inplace=False)
         self.layer1 = nn.Conv2d(input_channels, channels, kernel_size=4, stride=2, padding=1)
         self.bn1 = nn.BatchNorm2d(channels)
-        self.layer2 = nn.Conv2d(channels, 2*channels, kernel_size=4, stride=2, padding=1)
+        self.layer2 = nn.Conv2d(channels, 2 * channels, kernel_size=4, stride=2, padding=1)
         self.bn2 = nn.BatchNorm2d(channels * 2)
-        self.layer3 = nn.Conv2d(2*channels, 4*channels, kernel_size=4, stride=2, padding=1)
+        self.layer3 = nn.Conv2d(2 * channels, 4 * channels, kernel_size=4, stride=2, padding=1)
         self.bn3 = nn.BatchNorm2d(channels * 4)
-        self.layer4 = nn.Conv2d(4*channels, 8*channels, kernel_size=4, stride=2, padding=1)
+        self.layer4 = nn.Conv2d(4 * channels, 8 * channels, kernel_size=4, stride=2, padding=1)
         self.bn4 = nn.BatchNorm2d(channels * 8)
-        self.layer5 = nn.Conv2d(8*channels, 8*channels, kernel_size=4, stride=2, padding=1)
+        self.layer5 = nn.Conv2d(8 * channels, 8 * channels, kernel_size=4, stride=2, padding=1)
         self.bn5 = nn.BatchNorm2d(channels * 8)
         self.channel = channels
 
-        self.fc1 = nn.Linear(channels * 8 * 11 * 11, latent_size)
-        self.fc2 = nn.Linear(channels * 8 * 11 * 11, latent_size)
+        self.fc1 = nn.Linear(channels * 8 * 7 * 7, latent_size)
+        self.fc2 = nn.Linear(channels * 8 * 7 * 7, latent_size)
 
         self.leakyrelu = nn.LeakyReLU()
 
@@ -93,7 +96,7 @@ class Encoder_x(nn.Module):
         output = self.leakyrelu(self.bn4(self.layer4(output)))
         # print(output.size())
         output = self.leakyrelu(self.bn4(self.layer5(output)))
-        output = output.view(-1, self.channel * 8 * 11 * 11)
+        output = output.view(-1, self.channel * 8 * 7 * 7)
         # print(output.size())
         # output = self.tanh(output)
 
@@ -105,6 +108,7 @@ class Encoder_x(nn.Module):
 
         return dist, mu, logvar
 
+
 class Encoder_xy(nn.Module):
     def __init__(self, input_channels, channels, latent_size):
         super(Encoder_xy, self).__init__()
@@ -113,18 +117,18 @@ class Encoder_xy(nn.Module):
         self.relu = nn.ReLU(inplace=False)
         self.layer1 = nn.Conv2d(input_channels, channels, kernel_size=4, stride=2, padding=1)
         self.bn1 = nn.BatchNorm2d(channels)
-        self.layer2 = nn.Conv2d(channels, 2*channels, kernel_size=4, stride=2, padding=1)
+        self.layer2 = nn.Conv2d(channels, 2 * channels, kernel_size=4, stride=2, padding=1)
         self.bn2 = nn.BatchNorm2d(channels * 2)
-        self.layer3 = nn.Conv2d(2*channels, 4*channels, kernel_size=4, stride=2, padding=1)
+        self.layer3 = nn.Conv2d(2 * channels, 4 * channels, kernel_size=4, stride=2, padding=1)
         self.bn3 = nn.BatchNorm2d(channels * 4)
-        self.layer4 = nn.Conv2d(4*channels, 8*channels, kernel_size=4, stride=2, padding=1)
+        self.layer4 = nn.Conv2d(4 * channels, 8 * channels, kernel_size=4, stride=2, padding=1)
         self.bn4 = nn.BatchNorm2d(channels * 8)
-        self.layer5 = nn.Conv2d(8*channels, 8*channels, kernel_size=4, stride=2, padding=1)
+        self.layer5 = nn.Conv2d(8 * channels, 8 * channels, kernel_size=4, stride=2, padding=1)
         self.bn5 = nn.BatchNorm2d(channels * 8)
         self.channel = channels
 
-        self.fc1 = nn.Linear(channels * 8 * 11 * 11, latent_size)
-        self.fc2 = nn.Linear(channels * 8 * 11 * 11, latent_size)
+        self.fc1 = nn.Linear(channels * 8 * 7 * 7, latent_size)
+        self.fc2 = nn.Linear(channels * 8 * 7 * 7, latent_size)
 
         self.leakyrelu = nn.LeakyReLU()
 
@@ -138,7 +142,8 @@ class Encoder_xy(nn.Module):
         output = self.leakyrelu(self.bn4(self.layer4(output)))
         # print(output.size())
         output = self.leakyrelu(self.bn4(self.layer5(output)))
-        output = output.view(-1, self.channel * 8 * 11 * 11)
+        print(output.shape)
+        output = output.view(-1, self.channel * 8 * 7 * 7)
 
         mu = self.fc1(output)
         logvar = self.fc2(output)
@@ -147,6 +152,7 @@ class Encoder_xy(nn.Module):
         # output = self.tanh(output)
 
         return dist, mu, logvar
+
 
 class Generator(nn.Module):
     def __init__(self, channel, latent_dim):
@@ -174,19 +180,20 @@ class Generator(nn.Module):
 
     def forward(self, x, depth, y=None, training=True):
         if training:
-            self.posterior, muxy, logvarxy = self.xy_encoder(torch.cat((x,depth,y),1))
-            self.prior, mux, logvarx = self.x_encoder(torch.cat((x,depth),1))
+            self.posterior, muxy, logvarxy = self.xy_encoder(torch.cat((x, depth, y), 1))
+            self.prior, mux, logvarx = self.x_encoder(torch.cat((x, depth), 1))
             lattent_loss = torch.mean(self.kl_divergence(self.posterior, self.prior))
             z_noise_post = self.reparametrize(muxy, logvarxy)
             z_noise_prior = self.reparametrize(mux, logvarx)
-            self.prob_pred_post, self.depth_pred_post  = self.sal_encoder(x,depth,z_noise_post)
+            self.prob_pred_post, self.depth_pred_post = self.sal_encoder(x, depth, z_noise_post)
             self.prob_pred_prior, self.depth_pred_prior = self.sal_encoder(x, depth, z_noise_prior)
             return self.prob_pred_post, self.prob_pred_prior, lattent_loss, self.depth_pred_post, self.depth_pred_prior
         else:
-            _, mux, logvarx = self.x_encoder(torch.cat((x,depth),1))
+            _, mux, logvarx = self.x_encoder(torch.cat((x, depth), 1))
             z_noise = self.reparametrize(mux, logvarx)
-            self.prob_pred,_  = self.sal_encoder(x,depth,z_noise)
+            self.prob_pred, _ = self.sal_encoder(x, depth, z_noise)
             return self.prob_pred
+
 
 class ChannelReducer(nn.Module):
     def __init__(self, in_channels, out_channels, reduction_ratio=16):
@@ -258,6 +265,8 @@ class ASPPModule(nn.Module):
         # Concatenate ASPP branches and global pooling
         out = torch.cat((out1, out2, out3, out4, global_pool), dim=1)
         return out
+
+
 class WeightedFusionAttentionCNN(nn.Module):
     def __init__(self, in_channels):
         super(WeightedFusionAttentionCNN, self).__init__()
@@ -305,6 +314,7 @@ class WeightedFusionAttentionCNN(nn.Module):
 
         return output
 
+
 class GAT(torch.nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels, heads):
         super().__init__()
@@ -320,6 +330,7 @@ class GAT(torch.nn.Module):
         x = self.conv2(x, edge_index)
         return x
 
+
 class BasicConv2d(nn.Module):
     def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, dilation=1):
         super(BasicConv2d, self).__init__()
@@ -334,27 +345,82 @@ class BasicConv2d(nn.Module):
         x = self.bn(x)
         return x
 
+
 from torch_geometric.nn import GATConv
 from torch_geometric.data import Data
 
+
 class Classifier_Module(nn.Module):
-    def __init__(self,dilation_series,padding_series,NoLabels, input_channel):
+    def __init__(self, dilation_series, padding_series, NoLabels, input_channel):
         super(Classifier_Module, self).__init__()
         self.conv2d_list = nn.ModuleList()
-        for dilation,padding in zip(dilation_series,padding_series):
-            self.conv2d_list.append(nn.Conv2d(input_channel,NoLabels,kernel_size=3,stride=1, padding =padding, dilation = dilation,bias = True))
+        for dilation, padding in zip(dilation_series, padding_series):
+            self.conv2d_list.append(
+                nn.Conv2d(input_channel, NoLabels, kernel_size=3, stride=1, padding=padding, dilation=dilation,
+                          bias=True))
         for m in self.conv2d_list:
             m.weight.data.normal_(0, 0.01)
 
     def forward(self, x):
         out = self.conv2d_list[0](x)
-        for i in range(len(self.conv2d_list)-1):
-            out += self.conv2d_list[i+1](x)
+        for i in range(len(self.conv2d_list) - 1):
+            out += self.conv2d_list[i + 1](x)
         return out
-    
+
+
+import clip
+
+
+class TransformerDecoder(nn.Module):
+    def __init__(self, input_channels, output_channels, target_size):
+        super(TransformerDecoder, self).__init__()
+
+        # Transposed convolution layers for upsampling
+        self.transposed_conv1 = nn.ConvTranspose2d(input_channels, 512, kernel_size=4, stride=2, padding=1)
+        self.transposed_conv2 = nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1)
+        self.transposed_conv3 = nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1)
+        self.transposed_conv4 = nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1)
+        self.transposed_conv5 = nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1)
+
+        # Transformer layers
+        self.transformer1 = nn.Transformer(d_model=32, nhead=8, num_encoder_layers=6, num_decoder_layers=6)
+
+        # Final convolution layer to obtain the target size
+        self.final_conv = nn.Conv2d(32, output_channels, kernel_size=1)
+
+        # Target size for the output tensor
+        self.target_size = target_size
+
+    def forward(self, x):
+        # Upsampling using transposed convolution layers
+        x = self.transposed_conv1(x)
+        x = self.transposed_conv2(x)
+        x = self.transposed_conv3(x)
+        x = self.transposed_conv4(x)
+        x = self.transposed_conv5(x)
+
+        # Resize to the target size using bilinear interpolation
+        x = nn.functional.interpolate(x, size=self.target_size, mode='bilinear', align_corners=False)
+
+        # # Transformer layer
+        # print (x.shape, '... 391')
+        # x = x.permute(0, 2, 3, 1)
+        # print (x.shape, '... 393')
+        # x = x.view(self.target_size[0], self.target_size[1], -1)  # Reshape for transformer
+        # x = self.transformer1(x, x)
+        # x = x.view(x.shape[0], 32, self.target_size[0], self.target_size[1])  # Reshape back to the original shape
+
+        # Final convolution layer
+        x = self.final_conv(x)
+
+        return x
+
+
 class Saliency_feat_encoder(nn.Module):
     def __init__(self, channel, latent_dim):
         super(Saliency_feat_encoder, self).__init__()
+
+        self.clip_backbone, _ = clip.load("ViT-B/32", device=device)
 
         self.resnet = B2_ResNet()
         self.channels = 32
@@ -362,8 +428,6 @@ class Saliency_feat_encoder(nn.Module):
         # self.training = training
         # if self.training:
         self.initialize_weights()
-
-
 
         self.conv2_reduce = ChannelReducer(512, 64)
         self.conv3_reduce = ChannelReducer(1024, 64)
@@ -380,14 +444,13 @@ class Saliency_feat_encoder(nn.Module):
         self.wghted_attn = WeightedFusionAttentionCNN(self.channels)
 
         self.up = nn.Upsample(size=(352, 352), mode='bilinear')
-        self.conv_pred = nn.Conv2d(5,1,1)
+        self.conv_pred = nn.Conv2d(5, 1, 1)
 
         #####
         self.spatial_axes = [2, 3]
         self.xy_encoder = Encoder_xy(7, self.channels, latent_size=3)
         self.x_encoder = Encoder_x(6, self.channels, latent_size=3)
         self.conv_depth1 = BasicConv2d(6 + 3, 3, kernel_size=3, padding=1)
-
 
         self.upsample8 = nn.Upsample(scale_factor=8, mode='bilinear', align_corners=True)
         self.upsample4 = nn.Upsample(scale_factor=4, mode='bilinear', align_corners=True)
@@ -397,6 +460,8 @@ class Saliency_feat_encoder(nn.Module):
         self.conv3_depth = BasicConv2d(1024, channel, kernel_size=1)
         self.conv4_depth = BasicConv2d(2048, channel, kernel_size=1)
         self.layer_depth = self._make_pred_layer(Classifier_Module, [6, 12, 18, 24], [6, 12, 18, 24], 3, channel * 4)
+
+        self.decoder = TransformerDecoder(input_channels=768, output_channels=1, target_size=(224, 224)).to(device)
 
     def image_to_graph(self, input, radius, size):
         height, width = input.shape[-2], input.shape[-1]
@@ -424,7 +489,7 @@ class Saliency_feat_encoder(nn.Module):
         data = Data(x=x, edge_index=edge_index)
 
         return data
-    
+
     def _make_pred_layer(self, block, dilation_series, padding_series, NoLabels, input_channel):
         return block(dilation_series, padding_series, NoLabels, input_channel)
 
@@ -448,19 +513,24 @@ class Saliency_feat_encoder(nn.Module):
         z = torch.unsqueeze(z, 3)
         z = self.tile(z, 3, x.shape[self.spatial_axes[1]])
         x = torch.cat((x, depth, z), 1)
-        x = self.conv_depth1(x)
+        temp = x = self.conv_depth1(x)
 
-        x = self.resnet.conv1(x)
-        x = self.resnet.bn1(x)
-        x = self.resnet.relu(x)
-        x = self.resnet.maxpool(x)
-        x1 = self.resnet.layer1(x)  # 256 x 64 x 64
+        _, x = self.clip_backbone.encode_image(x)
+        # print ('504>>> ', x.shape)
+        x = x.type(torch.cuda.FloatTensor)
+        # print ('506>>> ', x.shape)
+        y = self.decoder(x)
+
+        temp = self.resnet.conv1(temp)
+        temp = self.resnet.bn1(temp)
+        temp = self.resnet.relu(temp)
+        temp = self.resnet.maxpool(temp)
+        x1 = self.resnet.layer1(temp)  # 256 x 64 x 64
         x2 = self.resnet.layer2(x1)  # 512 x 32 x 32
         x3 = self.resnet.layer3(x2)  # 1024 x 16 x 16
         x4 = self.resnet.layer4(x3)  # 2048 x 8 x 8
 
-
-        ## depth estimation
+        # ## depth estimation
         conv1_depth = self.conv1_depth(x1)
         conv2_depth = self.upsample2(self.conv2_depth(x2))
         conv3_depth = self.upsample4(self.conv3_depth(x3))
@@ -468,51 +538,18 @@ class Saliency_feat_encoder(nn.Module):
         conv_depth = torch.cat((conv4_depth, conv3_depth, conv2_depth, conv1_depth), 1)
         depth_pred = self.layer_depth(conv_depth)
 
-        # x = self.resnet.conv1(input)
-        # x = self.resnet.bn1(x)
-        # x = self.resnet.relu(x)
-        # x = self.resnet.maxpool(x)
-        #
-        # x1 = self.resnet.layer1(x)  # 256 x 64 x 64
-        # x2 = self.resnet.layer2(x1)  # 512 x 32 x 32
-        # x3 = self.resnet.layer3(x2)  # 1024 x 16 x 16
-        # x4 = self.resnet.layer4(x3)  # 2048 x 8 x 8
+        # x2 = self.conv2_reduce(x2)
+        # x3 = self.conv3_reduce(x3)
+        # x4 = self.conv4_reduce(x4)
 
-        x2 = self.conv2_reduce(x2)
-        x3 = self.conv3_reduce(x3)
-        x4 = self.conv4_reduce(x4)
+        # y = self.wghted_attn(x2, x3, x4)
 
-        # data2 = self.image_to_graph(x2, radius=5, size=32)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
-        # # x2, edge_index2 = data2.x, data2.edge_index
-        # x2 = F.relu(self.gatconv21(x2.view(-1, 64), data2.edge_index))
-        # # x2 = F.dropout(x2, p=0.5, training=self.training)
-        # # x2 = F.relu(self.gatconv22(x2, edge_index2))
-        # y2 = x2.view(-1, 32, 32).unsqueeze(0)
-        #
-        # data3 = self.image_to_graph(x3, radius=5, size=16)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
-        # # x3, edge_index3 = data3.x, data3.edge_index
-        # x3 = F.relu(self.gatconv31(x3.view(-1, 64), data3.edge_index))
-        # # x3 = F.dropout(x3, p=0.5, training=self.training)
-        # # x3 = F.relu(self.gatconv32(x3, edge_index3))
-        # y3 = x3.view(-1, 16, 16).unsqueeze(0)
-        #
-        # data4 = self.image_to_graph(x4, radius=5, size=8)  # 64x64x64 > x=[524288,1], edge_index=[2,1572864]
-        # # x4, edge_index4 = data4.x, data4.edge_index
-        # x4 = F.relu(self.gatconv41(x4.view(-1, 64), data4.edge_index))
-        # # x4 = F.dropout(x4, p=0.5, training=self.training)
-        # # x4 = F.relu(self.gatconv42(x4, edge_index4))
-        # y4 = x4.view(-1, 8, 8).unsqueeze(0)
-        # print (x2.shape, x3.shape, x4.shape)
+        # y = self.up(y)
+        # y = self.conv_pred(y)
 
-        y = self.wghted_attn(x2, x3, x4)
-        
-        y = self.up(y)
-        y = self.conv_pred(y)
+        # depth_pred = self.upsample4(depth_pred)
 
-        depth_pred = self.upsample4(depth_pred)
-
-        # print (y.shape, depth_pred.shape)
-
+        print(y.shape, depth_pred.shape, '<<<<<')
 
         return y, depth_pred
 
@@ -536,6 +573,7 @@ class Saliency_feat_encoder(nn.Module):
         assert len(all_params.keys()) == len(self.resnet.state_dict().keys())
         print(self.resnet.load_state_dict(all_params))
 
+
 # from ptflops import get_model_complexity_info
 
 # with torch.cuda.device(0):
@@ -547,15 +585,16 @@ class Saliency_feat_encoder(nn.Module):
 #   print('{:<30}  {:<8}'.format('Number of parameters: ', params))
 
 
-# batch_size = 8
-# model = Generator(32,3).to(device)
-# tensor = torch.randn((batch_size, 3, 352, 352)).to(device)
-# depth = torch.randn((batch_size, 3, 352, 352)).to(device)
-# gt = torch.randn((batch_size, 1, 352, 352)).to(device)
+batch_size = 4
+size = 224
+model = Generator(32, 3).to(device)
+tensor = torch.randn((batch_size, 3, size, size)).to(device)
+depth = torch.randn((batch_size, 3, size, size)).to(device)
+gt = torch.randn((batch_size, 1, size, size)).to(device)
 
-# with torch.no_grad():
-#     out = model.forward(tensor, depth, gt)
-#     # print(out[0].shape)
+with torch.no_grad():
+    sal = model.forward(tensor, depth, training=False)
+    print(sal.shape)
+    # print(out[0].shape)
 
-
-# print('Done')
+print('Done')
