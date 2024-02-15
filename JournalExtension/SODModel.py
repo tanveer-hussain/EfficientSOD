@@ -142,11 +142,12 @@ class Encoder_xy(nn.Module):
         output = self.leakyrelu(self.bn4(self.layer4(output)))
         # print(output.size())
         output = self.leakyrelu(self.bn4(self.layer5(output)))
-        print(output.shape)
+        # print (output.shape)
         output = output.view(-1, self.channel * 8 * 7 * 7)
 
         mu = self.fc1(output)
         logvar = self.fc2(output)
+        print(mu, '\n', logvar, '\n', mu.shape, '\n', logvar.shape)
         dist = Independent(Normal(loc=mu, scale=torch.exp(logvar)), 1)
         # print(output.size())
         # output = self.tanh(output)
@@ -180,6 +181,7 @@ class Generator(nn.Module):
 
     def forward(self, x, depth, y=None, training=True):
         if training:
+            print(x.shape, depth.shape, y.shape)
             self.posterior, muxy, logvarxy = self.xy_encoder(torch.cat((x, depth, y), 1))
             self.prior, mux, logvarx = self.x_encoder(torch.cat((x, depth), 1))
             lattent_loss = torch.mean(self.kl_divergence(self.posterior, self.prior))
@@ -193,50 +195,6 @@ class Generator(nn.Module):
             z_noise = self.reparametrize(mux, logvarx)
             self.prob_pred, _ = self.sal_encoder(x, depth, z_noise)
             return self.prob_pred
-
-
-class ChannelReducer(nn.Module):
-    def __init__(self, in_channels, out_channels, reduction_ratio=16):
-        super(ChannelReducer, self).__init__()
-
-        # 1x1 Convolution layers to reduce channels gradually
-        self.conv1 = nn.Conv2d(in_channels, in_channels // 2, kernel_size=1)
-        self.conv2 = nn.Conv2d(in_channels // 2, in_channels // 4, kernel_size=1)
-        self.conv3 = nn.Conv2d(in_channels // 4, out_channels, kernel_size=1)
-
-        # Channel pooling to further reduce channels
-        self.pool = nn.AdaptiveAvgPool2d(1)
-
-        # Channel attention blocks
-        self.se1 = self._make_se_block(in_channels // 2, reduction_ratio)
-        self.se2 = self._make_se_block(in_channels // 4, reduction_ratio)
-        self.se3 = self._make_se_block(out_channels, reduction_ratio)
-        self.se4 = self._make_se_block(out_channels, reduction_ratio)
-
-    def _make_se_block(self, in_channels, reduction_ratio):
-        return nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Conv2d(in_channels, in_channels // reduction_ratio, kernel_size=1),
-            nn.ReLU(inplace=False),
-            nn.Conv2d(in_channels // reduction_ratio, in_channels, kernel_size=1),
-            nn.Sigmoid()
-        )
-
-    def forward(self, x):
-        # Apply 1x1 convolutions
-        x1 = torch.relu(self.conv1(x))
-        x1 = x1 * self.se1(x1)  # Apply channel attention
-
-        x2 = torch.relu(self.conv2(x1))
-        x2 = x2 * self.se2(x2)  # Apply channel attention
-
-        x3 = torch.relu(self.conv3(x2))
-        x3 = x3 * self.se3(x3)  # Apply channel attention
-
-        # Channel pooling to reduce spatial dimensions to 1x1
-        # x3 = self.pool(x3)
-
-        return x3  # Remove singleton spatial dimensions
 
 
 class ASPPModule(nn.Module):
@@ -265,70 +223,6 @@ class ASPPModule(nn.Module):
         # Concatenate ASPP branches and global pooling
         out = torch.cat((out1, out2, out3, out4, global_pool), dim=1)
         return out
-
-
-class WeightedFusionAttentionCNN(nn.Module):
-    def __init__(self, in_channels):
-        super(WeightedFusionAttentionCNN, self).__init__()
-
-        # Upsampling layers to match the final size
-        self.up = nn.Upsample(size=(64, 64), mode='bilinear')
-
-        # Convolutional layers for each input
-        self.conv2 = nn.Conv2d(in_channels * 2, 256, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(in_channels * 2, 256, kernel_size=3, padding=1)
-        self.conv4 = nn.Conv2d(in_channels * 2, 256, kernel_size=3, padding=1)
-
-        # Attention mechanism
-        self.attention = nn.Sequential(
-            nn.Conv2d(768, 256, kernel_size=1),  # Adjust channels for attention
-            nn.ReLU(),
-            nn.Conv2d(256, 1, kernel_size=1),
-            nn.Sigmoid()
-        )
-
-        self.final_conv = ASPPModule(768, 1)
-
-    def forward(self, x2, x3, x4):
-        # Upsample smaller inputs to match the size of the largest one
-        x2 = self.up(x2)
-        x3 = self.up(x3)
-        x4 = self.up(x4)
-
-        # Apply convolutional layers to each input
-        x2 = self.conv2(x2)
-        x3 = self.conv3(x3)
-        x4 = self.conv4(x4)
-
-        # Concatenate the feature maps
-        fused = torch.cat((x2, x3, x4), dim=1)
-
-        # Apply attention mechanism
-        attention_weights = self.attention(fused)
-
-        # Apply attention to fused features
-        fused_attention = fused * attention_weights
-
-        # Final convolutional layer for output
-        output = self.final_conv(fused_attention)
-
-        return output
-
-
-class GAT(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels, heads):
-        super().__init__()
-        self.conv1 = GATConv(in_channels, hidden_channels, heads, dropout=0.6)
-        # On the Pubmed dataset, use `heads` output heads in `conv2`.
-        self.conv2 = GATConv(hidden_channels * heads, out_channels, heads=1,
-                             concat=False, dropout=0.6)
-
-    def forward(self, x, edge_index):
-        x = F.dropout(x, p=0.6, training=self.training)
-        x = F.elu(self.conv1(x, edge_index))
-        x = F.dropout(x, p=0.6, training=self.training)
-        x = self.conv2(x, edge_index)
-        return x
 
 
 class BasicConv2d(nn.Module):
@@ -429,20 +323,6 @@ class Saliency_feat_encoder(nn.Module):
         # if self.training:
         self.initialize_weights()
 
-        self.conv2_reduce = ChannelReducer(512, 64)
-        self.conv3_reduce = ChannelReducer(1024, 64)
-        self.conv4_reduce = ChannelReducer(2048, 64)
-
-        self.gatconv21 = GAT(in_channels=64, hidden_channels=64, out_channels=self.channels, heads=4)
-
-        #
-        self.gatconv31 = GATConv(in_channels=64, hidden_channels=64, out_channels=self.channels, heads=4)
-
-        #
-        self.gatconv41 = GATConv(in_channels=64, hidden_channels=64, out_channels=self.channels, heads=4)
-
-        self.wghted_attn = WeightedFusionAttentionCNN(self.channels)
-
         self.up = nn.Upsample(size=(352, 352), mode='bilinear')
         self.conv_pred = nn.Conv2d(5, 1, 1)
 
@@ -459,36 +339,10 @@ class Saliency_feat_encoder(nn.Module):
         self.conv2_depth = BasicConv2d(512, channel, kernel_size=1)
         self.conv3_depth = BasicConv2d(1024, channel, kernel_size=1)
         self.conv4_depth = BasicConv2d(2048, channel, kernel_size=1)
+        self.conv_pred = BasicConv2d(3, 1, 1)
         self.layer_depth = self._make_pred_layer(Classifier_Module, [6, 12, 18, 24], [6, 12, 18, 24], 3, channel * 4)
 
         self.decoder = TransformerDecoder(input_channels=768, output_channels=1, target_size=(224, 224)).to(device)
-
-    def image_to_graph(self, input, radius, size):
-        height, width = input.shape[-2], input.shape[-1]
-        num_nodes = height * width
-
-        # Constructing edge indices by considering connections within a radius
-        edge_index = []
-        for i in range(height):
-            for j in range(width):
-                node_idx = i * width + j
-                for dx in range(-radius, radius + 1):
-                    for dy in range(-radius, radius + 1):
-                        ni, nj = i + dx, j + dy
-                        if 0 <= ni < height and 0 <= nj < width:
-                            neighbor_idx = ni * width + nj
-                            if node_idx != neighbor_idx:  # Exclude self-loops
-                                edge_index.append((node_idx, neighbor_idx))
-
-        edge_index = torch.tensor(edge_index, dtype=torch.long).t().to(device)
-
-        # Ensure each edge exists in both directions (undirected graph)
-        edge_index = torch.cat([edge_index, edge_index.flip(0)], dim=1)
-
-        x = input.view(-1, size * size)  # Assuming the input is shaped for the ResNet
-        data = Data(x=x, edge_index=edge_index)
-
-        return data
 
     def _make_pred_layer(self, block, dilation_series, padding_series, NoLabels, input_channel):
         return block(dilation_series, padding_series, NoLabels, input_channel)
@@ -536,7 +390,7 @@ class Saliency_feat_encoder(nn.Module):
         conv3_depth = self.upsample4(self.conv3_depth(x3))
         conv4_depth = self.upsample8(self.conv4_depth(x4))
         conv_depth = torch.cat((conv4_depth, conv3_depth, conv2_depth, conv1_depth), 1)
-        depth_pred = self.layer_depth(conv_depth)
+        depth_pred = self.upsample4(self.layer_depth(conv_depth))
 
         # x2 = self.conv2_reduce(x2)
         # x3 = self.conv3_reduce(x3)
@@ -549,9 +403,7 @@ class Saliency_feat_encoder(nn.Module):
 
         # depth_pred = self.upsample4(depth_pred)
 
-        print(y.shape, depth_pred.shape, '<<<<<')
-
-        return y, depth_pred
+        return y, self.conv_pred(depth_pred)
 
     def initialize_weights(self):
         print('Loading weights...')
@@ -573,7 +425,6 @@ class Saliency_feat_encoder(nn.Module):
         assert len(all_params.keys()) == len(self.resnet.state_dict().keys())
         print(self.resnet.load_state_dict(all_params))
 
-
 # from ptflops import get_model_complexity_info
 
 # with torch.cuda.device(0):
@@ -585,16 +436,17 @@ class Saliency_feat_encoder(nn.Module):
 #   print('{:<30}  {:<8}'.format('Number of parameters: ', params))
 
 
-batch_size = 4
-size = 224
-model = Generator(32, 3).to(device)
-tensor = torch.randn((batch_size, 3, size, size)).to(device)
-depth = torch.randn((batch_size, 3, size, size)).to(device)
-gt = torch.randn((batch_size, 1, size, size)).to(device)
+# batch_size = 8
+# size = 224
+# model = Generator(32,3).to(device)
+# tensor = torch.randn((batch_size, 3, size, size)).to(device)
+# depth = torch.randn((batch_size, 3, size, size)).to(device)
+# gt = torch.randn((batch_size, 1, size, size)).to(device)
 
-with torch.no_grad():
-    sal = model.forward(tensor, depth, training=False)
-    print(sal.shape)
-    # print(out[0].shape)
+# with torch.no_grad():
+#     sal = model.forward(tensor, depth, gt, training=True)
+#     # print (sal.shape)
+#     # print(out[0].shape)
 
-print('Done')
+
+# print('Done')

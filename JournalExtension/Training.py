@@ -92,8 +92,15 @@ def train(generator, generator_optimizer, crit, train_loader, epoch, epochs):
         gts = gts.to(device)
         depths = depths.to(device)
 
+        if torch.isnan(images).any() or torch.isinf(depths).any() or torch.isinf(gts).any():
+            print("Input data contains NaN or infinite values.")
+
+        torch.autograd.set_detect_anomaly(True)
 
         pred_post, pred_prior, latent_loss, depth_pred_post, depth_pred_prior = generator.forward(images, depths, gts)
+
+        print (pred_post.shape, pred_prior.shape, '....1')
+        print (depth_pred_post.shape, depth_pred_prior.shape), '....2'
 
         ## l2 regularizer the inference model
         reg_loss = l2_regularisation(generator.xy_encoder) + \
@@ -112,9 +119,11 @@ def train(generator, generator_optimizer, crit, train_loader, epoch, epochs):
         depth_loss_prior = 0.1 * mse_loss(torch.sigmoid(depth_pred_prior), depths)
         gen_loss_gsnn = structure_loss(pred_prior, gts) + smoothLoss_prior + depth_loss_prior
         gen_loss_gsnn = (1 - 0.4) * gen_loss_gsnn
+
         gen_loss = gen_loss_cvae + gen_loss_gsnn + reg_loss
 
         generator_optimizer.zero_grad()
+        print (gen_loss_cvae.item(), gen_loss_gsnn.item(), reg_loss.item(), 'gen loss .....', gen_loss.item())
         gen_loss.backward()
         generator_optimizer.step()
 
@@ -127,6 +136,7 @@ def train(generator, generator_optimizer, crit, train_loader, epoch, epochs):
     return gen_loss.item()
 
 import imageio
+import clip
 
 def visualize_uncertainty_post_init(var_map):
 
@@ -167,7 +177,7 @@ def visualize_gt(var_map):
 
 def main():
     datasets = ['SIP', 'DUT-RGBD', 'NLPR', 'NJU2K']
-    current_dataset = datasets[0]
+    current_dataset = datasets[2]
 
     print('__Number of CUDA Devices:', cuda.device_count(), ', active:', cuda.current_device())
     print('Device name: .... ', cuda.get_device_name(cuda.current_device()), ', available >', cuda.is_available())
@@ -178,7 +188,7 @@ def main():
     generator.train()
 
     generator_params = generator.parameters()
-    generator_optimizer = torch.optim.Adam(generator_params, 5e-5, betas=[0.5, 0.999])
+    generator_optimizer = torch.optim.Adam(generator_params, 0.0001, betas=[0.5, 0.999])
 
     # generator = nn.DataParallel(generator)
 
